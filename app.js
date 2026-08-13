@@ -51,6 +51,10 @@ const PRIORITY_CATEGORY="__priority__";
 const PRIORITY_SENTINEL_TEXT="__priority_initialized_v1__";
 const MEDICATION_CATEGORY="__medication__";
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
+const URGE_TYPES=[
+  {id:"vanish",label:"消えたい衝動"},
+  {id:"die",label:"死にたい衝動"}
+];
 const day=()=>{
   const d=new Date();
   const y=d.getFullYear();
@@ -541,6 +545,41 @@ async function deletePriority(ruleId){
   setStatus("☁️ 最優先を削除しました");
 }
 
+function getUrgeLevel(type){
+  for(let level=0;level<=10;level++){
+    if(state.checks[`urge:${type}:${level}`]) return level;
+  }
+  return null;
+}
+
+async function saveUrgeLevel(type,level){
+  const previous=getUrgeLevel(type);
+  if(previous!==null){
+    await saveCheck(`urge:${type}:${previous}`,false);
+  }
+  await saveCheck(`urge:${type}:${level}`,true);
+  renderUrges();
+}
+
+function renderUrges(){
+  const wrap=document.getElementById("urgeLevels");
+  if(!wrap)return;
+  wrap.innerHTML="";
+  for(const type of URGE_TYPES){
+    const row=document.createElement("div"); row.className="urge-row";
+    const label=document.createElement("label"); label.textContent=type.label; label.setAttribute("for",`urge-${type.id}`);
+    const select=document.createElement("select"); select.id=`urge-${type.id}`; select.setAttribute("aria-label",`${type.label}の10段階評価`);
+    const placeholder=document.createElement("option"); placeholder.value=""; placeholder.textContent="選択してください"; select.appendChild(placeholder);
+    for(let level=0;level<=10;level++){
+      const option=document.createElement("option"); option.value=String(level); option.textContent=`${level} / 10`; select.appendChild(option);
+    }
+    const current=getUrgeLevel(type.id);
+    if(current!==null) select.value=String(current);
+    select.onchange=async()=>{ if(select.value!=="") await saveUrgeLevel(type.id,Number(select.value)); };
+    row.append(label,select); wrap.appendChild(row);
+  }
+}
+
 function renderPriority(){
   const wrap=document.getElementById("priorityList");
   if(!wrap)return;
@@ -626,6 +665,7 @@ function renderAchievementChart(points){
 
 function render(){
   renderPriority();
+  renderUrges();
   renderMedication();
   const wrap=document.getElementById("categories"); wrap.innerHTML="";
   const groups={};
@@ -657,23 +697,6 @@ function render(){
 }
 
 document.getElementById("date").textContent=new Intl.DateTimeFormat("ja-JP",{dateStyle:"full"}).format(new Date());
-
-document.getElementById("newCategory").addEventListener("change",(e)=>{
-  if(e.target.value !== "__custom__") return;
-  const current=[...e.target.options].find(o=>o.value !== "__custom__" && o.selected)?.text || "";
-  const name=prompt("新しいカテゴリ名を入力してください。", current);
-  if(name && name.trim()){
-    const value=name.trim();
-    const exists=[...e.target.options].find(o=>o.value===value);
-    if(!exists){
-      const opt=document.createElement("option"); opt.value=value; opt.textContent=value;
-      e.target.insertBefore(opt,e.target.querySelector('option[value="__custom__"]'));
-    }
-    e.target.value=value;
-  } else {
-    e.target.value=e.target.options[0]?.value || "生活";
-  }
-});
 
 document.getElementById("addMedicationBtn").onclick=async()=>{
   const name=document.getElementById("newMedicationName").value.trim();
