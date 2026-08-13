@@ -75,7 +75,13 @@ function baseItems(){
 }
 
 function allItems(){
-  return state.custom.map(x=>({...x,id:`c:${x.id}`}));
+  const rules=state.custom
+    .filter(x=>x.cat!==MEDICATION_CATEGORY)
+    .map(x=>({...x,id:`c:${x.id}`}));
+  const meds=(state.medications||[]).map(x=>({
+    id:`m:${x.id}`, cat:"服薬管理", text:`${x.name}${x.dose?`（${x.dose}）`:""}${x.timing?`・${x.timing}`:""}`, source:x.note||""
+  }));
+  return [...rules,...meds];
 }
 
 function priorityItems(){
@@ -253,12 +259,14 @@ async function loadCloud(){
   if(cr.error){console.error(cr.error); return;}
   const rows=cr.data||[];
   state.custom=rows
-    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY)
+    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY)
     .map(x=>({id:x.id,text:x.text,cat:x.category,source:x.source||""}));
   state.priority=rows
     .filter(x=>x.category===PRIORITY_CATEGORY && x.text!==PRIORITY_SENTINEL_TEXT)
     .map(x=>({id:x.id,text:x.text}));
   state.medications=rows.filter(x=>x.category===MEDICATION_CATEGORY).map(parseMedicationRow);
+  render();
+  await loadAchievementHistory();
 }
 
 async function saveCheck(itemId,checked){
@@ -565,8 +573,55 @@ function renderPriority(){
 
 function updateProgress(){
   const items=allItems(), done=items.filter(x=>state.checks[x.id]).length;
-  document.getElementById("progressText").textContent=`${done} / ${items.length}`;
-  document.getElementById("progressBar").style.width=(items.length ? done/items.length*100 : 0)+"%";
+  const rate=items.length ? Math.round(done/items.length*100) : 0;
+  document.getElementById("progressText").textContent=`${done} / ${items.length}（${rate}%）`;
+  document.getElementById("progressBar").style.width=rate+"%";
+  const summary=document.getElementById("achievementSummary");
+  if(summary) summary.textContent=`達成率 ${rate}%　・　${done}項目達成 / ${items.length}項目`;
+}
+
+function dateOffset(offset){
+  const d=new Date(); d.setDate(d.getDate()+offset);
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), dd=String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${dd}`;
+}
+function shortDate(iso){
+  const [y,m,d]=iso.split("-"); return `${Number(m)}/${Number(d)}`;
+}
+async function loadAchievementHistory(){
+  const chart=document.getElementById("achievementChart");
+  const note=document.getElementById("chartNote");
+  if(!chart)return;
+  const dates=Array.from({length:7},(_,i)=>dateOffset(i-6));
+  const total=allItems().length;
+  if(!supabaseReady||!user||!total){
+    renderAchievementChart(dates.map(date=>({date,rate:0,done:0})));
+    if(note) note.textContent=total?"ログインすると過去7日間の達成率を表示できます。":"ルールや服薬を登録すると達成率を表示できます。";
+    return;
+  }
+  const {data,error}=await supabaseClient.from("daily_check_states")
+    .select("check_date,item_id,checked").eq("user_id",user.id).gte("check_date",dates[0]).lte("check_date",dates[6]);
+  if(error){console.error(error); if(note) note.textContent="グラフデータを読み込めませんでした。"; return;}
+  const byDate={};
+  for(const row of data||[]) if(row.checked){(byDate[row.check_date]??=[]).push(row.item_id);}
+  const points=dates.map(date=>{
+    const done=new Set(byDate[date]||[]).size;
+    return {date,done,rate:Math.min(100,Math.round(done/total*100))};
+  });
+  renderAchievementChart(points);
+  if(note) note.textContent=`現在の${total}項目を基準に、直近7日間の達成率を表示しています。`;
+}
+function renderAchievementChart(points){
+  const chart=document.getElementById("achievementChart"); if(!chart)return;
+  chart.innerHTML="";
+  for(const point of points){
+    const col=document.createElement("div"); col.className="chart-col";
+    const value=document.createElement("span"); value.className="chart-value"; value.textContent=`${point.rate}%`;
+    const track=document.createElement("div"); track.className="chart-track";
+    const bar=document.createElement("div"); bar.className="chart-bar"; bar.style.height=`${Math.max(point.rate,2)}%`; track.appendChild(bar);
+    const label=document.createElement("span"); label.className="chart-label"; label.textContent=shortDate(point.date);
+    col.append(value,track,label); chart.appendChild(col);
+  }
 }
 
 function render(){
@@ -629,6 +684,8 @@ document.getElementById("addBtn").onclick=async()=>{
   await addCustom(text,document.getElementById("newCategory").value);
   input.value="";
 };
+
+document.getElementById("printBtn").onclick=()=>window.print();
 
 document.getElementById("resetBtn").onclick=async()=>{
   if(!confirm("今日のチェックをすべて未チェックにしますか？"))return;

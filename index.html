@@ -16,7 +16,7 @@
       <p id="date"></p>
       <p id="syncStatus" class="sync">接続準備中…</p>
     </div>
-    <button id="resetBtn" class="ghost">今日をリセット</button>
+    <div class="header-actions"><button id="printBtn" class="ghost">🖨️ PDF / 印刷</button><button id="resetBtn" class="ghost">今日をリセット</button></div>
   </header>
 
   <main>
@@ -117,10 +117,20 @@
 
     <section class="progress card">
       <div class="progress-head">
-        <strong>今日の達成状況</strong>
-        <span id="progressText">0 / 0</span>
+        <strong>今日の達成率</strong>
+        <span id="progressText">0 / 0（0%）</span>
       </div>
       <div class="bar"><div id="progressBar"></div></div>
+      <div id="achievementSummary" class="achievement-summary">達成率 0%</div>
+    </section>
+
+    <section class="card chart-card">
+      <div class="section-head">
+        <h2>📊 達成率グラフ</h2>
+        <span class="muted small">直近7日間</span>
+      </div>
+      <div id="achievementChart" class="achievement-chart" aria-label="直近7日間の達成率グラフ"></div>
+      <p id="chartNote" class="muted small">データを読み込んでいます…</p>
     </section>
 
     <div id="categories"></div>
@@ -141,7 +151,7 @@
     </section>
   </main>
 
-  <footer>Supabase同期版 v0.7</footer>
+  <footer>Supabase同期版 v0.8</footer>
   <script type="module" src="app.js"></script>
 </body>
 </html>
