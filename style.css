@@ -27,3 +27,5 @@
   .priority-row{padding:5px 0}.medication-row{padding:7px 0}
   .source{font-size:10px}
 }
+
+.priority-row{display:flex;align-items:center;gap:8px;width:100%;padding:7px 0}.priority-row>span:first-child{background:#eef2ff;padding:7px 10px;border-radius:9px;flex:1;min-width:0}.priority-row .rule-actions{margin-left:auto}.priority-arrow{display:block!important;background:none!important;padding:0!important;color:#6366f1;text-align:center;width:100%}
