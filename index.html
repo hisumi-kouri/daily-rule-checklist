@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#4f46e5">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  <title>毎日のルールチェック v0.4</title>
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">Daily Rule Checklist</p>
+      <h1>毎日のルールチェック</h1>
+      <p id="date"></p>
+      <p id="syncStatus" class="sync">接続準備中…</p>
+    </div>
+    <button id="resetBtn" class="ghost">今日をリセット</button>
+  </header>
+
+  <main>
+    <section class="card account-card">
+      <div class="account-head">
+        <div>
+          <h2>👤 アカウント・同期</h2>
+          <p id="accountStatus" class="muted">確認中…</p>
+        </div>
+        <button id="signOutBtn" class="ghost hidden">ログアウト</button>
+      </div>
+
+      <div id="anonymousPanel">
+        <p class="muted">この端末では匿名アカウントで利用しています。メールアドレスを連携すると、PC・スマホで同じデータを使えます。</p>
+        <div class="form">
+          <input id="linkEmail" type="email" placeholder="メールアドレス">
+          <button id="linkEmailBtn">メールを連携</button>
+        </div>
+
+        <div id="passwordPanel" class="hidden">
+          <p class="muted">メール確認が完了したら、8文字以上のパスワードを設定してください。</p>
+          <div class="form">
+            <input id="linkPassword" type="password" placeholder="8文字以上のパスワード">
+            <button id="setPasswordBtn">パスワードを設定</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="loggedInPanel" class="hidden">
+        <p class="muted">このアカウントでPC・スマホ間のチェック状態と追加ルールを同期できます。</p>
+
+        <div class="account-action">
+          <h3>🔑 パスワード</h3>
+          <p class="muted small">このアカウントのログイン用パスワードを設定・変更します。</p>
+          <div class="form">
+            <input id="currentPassword" type="password" placeholder="現在のパスワード（設定済みの場合）">
+            <input id="newPassword" type="password" placeholder="新しいパスワード（8文字以上）">
+            <button id="changePasswordBtn">パスワードを更新</button>
+          </div>
+        </div>
+
+        <div class="account-action">
+          <h3>📧 パスワードを忘れた場合</h3>
+          <p class="muted small">登録メールアドレスへ再設定メールを送ります。</p>
+          <button id="resetPasswordBtn" class="secondary">再設定メールを送る</button>
+        </div>
+
+        <div class="account-action">
+          <h3>📱 別の端末で使う</h3>
+          <p class="muted small">別のPCやスマホで、このメールアドレスとパスワードを使ってログインしてください。</p>
+        </div>
+
+        <p id="authMessage" class="auth-message"></p>
+      </div>
+    </section>
+
+    <section class="priority card">
+      <h2>🌿 最優先</h2>
+      <div class="priority-order">
+        <span>1. 体調第一</span><span>→</span><span>2. 生活</span><span>→</span><span>3. 仕事</span>
+      </div>
+      <p>この順番を忘れない。</p>
+    </section>
+
+    <section class="progress card">
+      <div class="progress-head">
+        <strong>今日の達成状況</strong>
+        <span id="progressText">0 / 0</span>
+      </div>
+      <div class="bar"><div id="progressBar"></div></div>
+    </section>
+
+    <div id="categories"></div>
+
+    <section class="card add">
+      <h2>➕ ルールを追加</h2>
+      <div class="form">
+        <input id="newText" placeholder="例：作業前に○○を確認する">
+        <select id="newCategory">
+          <option>生活</option>
+          <option>職場・基本ルール</option>
+          <option>出品ルール</option>
+          <option>リタリコブログ</option>
+          <option>今日の確認</option>
+        </select>
+        <button id="addBtn">追加</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>Supabase同期版 v0.4</footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
