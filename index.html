@@ -16,7 +16,7 @@
       <p id="date"></p>
       <p id="syncStatus" class="sync">接続準備中…</p>
     </div>
-    <button id="resetBtn" class="ghost">今日をリセット</button>
+    <div class="header-actions"><button id="printBtn" class="ghost">🖨️ PDF / 印刷</button><button id="resetBtn" class="ghost">今日をリセット</button></div>
   </header>
 
   <main>
@@ -86,20 +86,51 @@
       </div>
     </section>
 
+    <section class="card medication-card">
+      <div class="section-head">
+        <h2>💊 服薬管理</h2>
+        <span class="muted small">追加・変更・削除できます</span>
+      </div>
+      <div id="medicationList" class="medication-list"></div>
+      <div class="medication-add form medication-form">
+        <input id="newMedicationName" placeholder="薬の名前">
+        <input id="newMedicationDose" placeholder="用量（例：1錠）">
+        <input id="newMedicationTiming" placeholder="服用タイミング（例：朝食後）">
+        <input id="newMedicationNote" placeholder="メモ（任意）">
+        <button id="addMedicationBtn">追加</button>
+      </div>
+      <p class="muted small">服用したらチェックできます。チェック状態は日付ごとに保存されます。</p>
+    </section>
+
     <section class="priority card">
-      <h2>🌿 最優先</h2>
-      <div class="priority-order">
-        <span>1. 体調第一</span><span>→</span><span>2. 生活</span><span>→</span><span>3. 仕事</span>
+      <div class="section-head">
+        <h2>🌿 最優先</h2>
+        <span class="muted small">変更・削除できます</span>
+      </div>
+      <div id="priorityList" class="priority-order"></div>
+      <div class="priority-add form">
+        <input id="newPriorityText" placeholder="最優先の項目を追加">
+        <button id="addPriorityBtn">追加</button>
       </div>
       <p>この順番を忘れない。</p>
     </section>
 
     <section class="progress card">
       <div class="progress-head">
-        <strong>今日の達成状況</strong>
-        <span id="progressText">0 / 0</span>
+        <strong>今日の達成率</strong>
+        <span id="progressText">0 / 0（0%）</span>
       </div>
       <div class="bar"><div id="progressBar"></div></div>
+      <div id="achievementSummary" class="achievement-summary">達成率 0%</div>
+    </section>
+
+    <section class="card chart-card">
+      <div class="section-head">
+        <h2>📊 達成率グラフ</h2>
+        <span class="muted small">直近7日間</span>
+      </div>
+      <div id="achievementChart" class="achievement-chart" aria-label="直近7日間の達成率グラフ"></div>
+      <p id="chartNote" class="muted small">データを読み込んでいます…</p>
     </section>
 
     <div id="categories"></div>
@@ -120,7 +151,7 @@
     </section>
   </main>
 
-  <footer>Supabase同期版 v0.4</footer>
+  <footer>Supabase同期版 v0.8</footer>
   <script type="module" src="app.js"></script>
 </body>
 </html>

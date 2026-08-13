@@ -4,3 +4,26 @@
 @media(max-width:650px){.account-head{align-items:flex-start;flex-direction:column}.account-head .ghost{align-self:flex-end}}
 
 .account-action{border-top:1px solid #eef0f3;padding-top:14px;margin-top:14px}.account-action h3{margin:0 0 4px;font-size:16px}.small{font-size:12px}.secondary{border:1px solid #d1d5db;border-radius:10px;padding:10px 14px;background:white;cursor:pointer}.auth-message{font-size:13px;min-height:20px;margin:10px 0 0;color:#4b5563}
+
+.delete-rule{margin-left:auto;flex:none;border:1px solid #fecaca;border-radius:8px;padding:6px 9px;background:#fff;color:#dc2626;font-size:12px;cursor:pointer;opacity:.9}.delete-rule:hover{background:#fef2f2;opacity:1}.check:has(.delete-rule){padding-right:0}@media(max-width:650px){.delete-rule{padding:7px 9px}}
+
+.rule-actions{display:flex;gap:6px;margin-left:auto;flex:none}.edit-rule,.delete-rule{border-radius:8px;padding:6px 9px;font-size:12px;cursor:pointer;background:white}.edit-rule{border:1px solid #c7d2fe;color:#4338ca}.edit-rule:hover{background:#eef2ff}.delete-rule{border:1px solid #fecaca;color:#dc2626}.delete-rule:hover{background:#fef2f2}.check{align-items:center}.check .text{flex:1;min-width:0}@media(max-width:650px){.rule-actions{gap:4px}.edit-rule,.delete-rule{padding:7px 8px}}
+
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.priority-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0}.priority-row>span:first-child{flex:1}.priority-arrow{display:block;text-align:center;padding:2px 0}.priority-add{margin-top:12px}.priority-add input{flex:1;min-width:0}
+
+.medication-card{border-left:5px solid #10b981}.medication-list{display:grid;gap:8px}.medication-row{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid #eef0f3}.medication-row.taken .medication-main strong{text-decoration:line-through;color:#9ca3af}.medication-main{min-width:0}.medication-meta{color:#6b7280;font-size:12px;margin-top:4px;line-height:1.6}.medication-taken{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:12px;color:#4b5563}.medication-taken input{width:18px;height:18px;accent-color:#10b981}.medication-form{grid-template-columns:1fr 150px 180px 1fr auto;margin-top:12px}.medication-card>p{margin:10px 0 0}.medication-row .rule-actions{margin-left:0}@media(max-width:700px){.medication-form{grid-template-columns:1fr}.medication-row{grid-template-columns:1fr auto}.medication-row .rule-actions{grid-column:1 / -1;justify-content:flex-end}.medication-taken{justify-self:end}}
+.header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.achievement-summary{margin-top:10px;font-weight:700;color:#4338ca}.chart-card{overflow:hidden}.achievement-chart{height:220px;display:flex;align-items:flex-end;gap:10px;padding:16px 8px 4px;border-top:1px solid #eef0f3}.chart-col{height:100%;flex:1;min-width:28px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:5px}.chart-value{font-size:11px;color:#4b5563;min-height:16px}.chart-track{height:150px;width:100%;max-width:44px;background:#eef2ff;border-radius:8px 8px 4px 4px;display:flex;align-items:flex-end;overflow:hidden}.chart-bar{width:100%;background:#6366f1;border-radius:8px 8px 0 0;min-height:3px;transition:height .3s ease}.chart-label{font-size:11px;color:#6b7280}.medication-row{break-inside:avoid}
+@media(max-width:650px){.header-actions{width:100%;justify-content:flex-end}.header-actions button{padding:8px 10px}.achievement-chart{gap:5px}.chart-track{max-width:34px}}
+@media print{
+  @page{size:A4 portrait;margin:12mm}
+  body{background:#fff!important;color:#111827;font-size:12px}
+  header{padding:0 0 10px;border-bottom:1px solid #aaa;box-shadow:none}
+  header .header-actions, .account-card, .add, footer, .priority-add, .medication-form, .edit-rule, .delete-rule, #resetBtn, .auth-message{display:none!important}
+  main{max-width:none;margin:10px 0;padding:0}
+  .card{box-shadow:none;border:1px solid #ccc;border-radius:8px;padding:10px;margin-bottom:10px;break-inside:avoid}
+  .progress{break-inside:avoid}.chart-card{break-inside:avoid}
+  .achievement-chart{height:180px}.chart-track{height:125px}
+  .check{padding:7px 2px}.check input{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .priority-row{padding:5px 0}.medication-row{padding:7px 0}
+  .source{font-size:10px}
+}
