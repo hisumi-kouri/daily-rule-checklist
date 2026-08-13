@@ -44,11 +44,12 @@ const base=[
 ];
 
 let supabaseReady=false, user=null;
-let state={checks:{}, custom:[], priority:[]};
+let state={checks:{}, custom:[], priority:[], medications:[]};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const PRIORITY_CATEGORY="__priority__";
 const PRIORITY_SENTINEL_TEXT="__priority_initialized_v1__";
+const MEDICATION_CATEGORY="__medication__";
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
 const day=()=>{
   const d=new Date();
@@ -154,6 +155,86 @@ async function ensurePriorityRules(){
   if(markerInsert.error) throw markerInsert.error;
 }
 
+function parseMedicationRow(row){
+  try{
+    const data=JSON.parse(row.text);
+    if(data && data.name) return {id:row.id,name:data.name,dose:data.dose||"",timing:data.timing||"",note:data.note||""};
+  }catch(e){}
+  return {id:row.id,name:row.text||"",dose:"",timing:"",note:row.source||""};
+}
+
+async function addMedication(data){
+  if(!user)return;
+  const payload=JSON.stringify({name:data.name,dose:data.dose||"",timing:data.timing||"",note:data.note||""});
+  const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:payload,category:MEDICATION_CATEGORY,source:data.note||""}).select().single();
+  if(res.error){setStatus("⚠️ 服薬の追加に失敗"); console.error(res.error); return;}
+  state.medications.push(parseMedicationRow(res.data));
+  setStatus("☁️ 服薬を追加しました"); renderMedication();
+}
+
+async function editMedication(id){
+  const med=state.medications.find(x=>String(x.id)===String(id));
+  if(!med)return;
+  const name=prompt("薬の名前を変更してください。",med.name);
+  if(name===null)return;
+  const trimmed=name.trim();
+  if(!trimmed)return;
+  const dose=prompt("用量を変更してください。",med.dose||"");
+  if(dose===null)return;
+  const timing=prompt("服用タイミングを変更してください。",med.timing||"");
+  if(timing===null)return;
+  const note=prompt("メモを変更してください。",med.note||"");
+  if(note===null)return;
+  const payload=JSON.stringify({name:trimmed,dose:dose.trim(),timing:timing.trim(),note:note.trim()});
+  const {error}=await supabaseClient.from("custom_rules").update({text:payload,source:note.trim()}).eq("id",med.id).eq("user_id",user.id).eq("category",MEDICATION_CATEGORY);
+  if(error){setStatus("⚠️ 服薬の変更に失敗"); console.error(error); return;}
+  state.medications=state.medications.map(x=>String(x.id)===String(id)?{...x,name:trimmed,dose:dose.trim(),timing:timing.trim(),note:note.trim()}:x);
+  setStatus("☁️ 服薬を変更しました"); renderMedication();
+}
+
+async function deleteMedication(id){
+  const med=state.medications.find(x=>String(x.id)===String(id));
+  if(!med)return;
+  if(!confirm(`「${med.name}」を削除しますか？\n\n服薬データとチェック履歴を削除します。`))return;
+  const {error}=await supabaseClient.from("custom_rules").delete().eq("id",med.id).eq("user_id",user.id).eq("category",MEDICATION_CATEGORY);
+  if(error){setStatus("⚠️ 服薬の削除に失敗"); console.error(error); return;}
+  const {error:checkError}=await supabaseClient.from("daily_check_states").delete().eq("user_id",user.id).eq("item_id",`m:${med.id}`);
+  if(checkError)console.warn(checkError);
+  delete state.checks[`m:${med.id}`];
+  state.medications=state.medications.filter(x=>String(x.id)!==String(id));
+  setStatus("☁️ 服薬を削除しました"); renderMedication();
+}
+
+function renderMedication(){
+  const wrap=document.getElementById("medicationList");
+  if(!wrap)return;
+  wrap.innerHTML="";
+  if(!state.medications.length){
+    const empty=document.createElement("p"); empty.className="muted small"; empty.textContent="登録されている薬はありません。"; wrap.appendChild(empty); return;
+  }
+  for(const med of state.medications){
+    const row=document.createElement("div"); row.className="medication-row";
+    const main=document.createElement("div"); main.className="medication-main";
+    const title=document.createElement("strong"); title.textContent=med.name;
+    const meta=document.createElement("div"); meta.className="medication-meta";
+    if(med.dose)meta.append(document.createTextNode(med.dose));
+    if(med.timing)meta.append(document.createTextNode((med.dose?"・":"")+med.timing));
+    if(med.note)meta.append(document.createTextNode((med.dose||med.timing?"・":"")+med.note));
+    main.append(title,meta);
+    const check=document.createElement("label"); check.className="medication-taken";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!state.checks[`m:${med.id}`];
+    const span=document.createElement("span"); span.textContent="服用済み";
+    cb.onchange=async()=>{await saveCheck(`m:${med.id}`,cb.checked); renderMedication();};
+    check.append(cb,span);
+    if(cb.checked)row.classList.add("taken");
+    const actions=document.createElement("div"); actions.className="rule-actions";
+    const edit=document.createElement("button"); edit.type="button"; edit.className="edit-rule"; edit.textContent="変更"; edit.onclick=()=>editMedication(med.id);
+    const del=document.createElement("button"); del.type="button"; del.className="delete-rule"; del.textContent="削除"; del.onclick=()=>deleteMedication(med.id);
+    actions.append(edit,del);
+    row.append(main,check,actions); wrap.appendChild(row);
+  }
+}
+
 async function loadCloud(){
   if(!supabaseReady||!user)return;
   await ensureBaseRules();
@@ -177,6 +258,7 @@ async function loadCloud(){
   state.priority=rows
     .filter(x=>x.category===PRIORITY_CATEGORY && x.text!==PRIORITY_SENTINEL_TEXT)
     .map(x=>({id:x.id,text:x.text}));
+  state.medications=rows.filter(x=>x.category===MEDICATION_CATEGORY).map(parseMedicationRow);
 }
 
 async function saveCheck(itemId,checked){
@@ -345,7 +427,7 @@ async function sendPasswordReset(){
 async function logout(){
   const {error}=await supabaseClient.auth.signOut();
   if(error){alert(error.message); return;}
-  user=null; state={checks:{},custom:[],priority:[]};
+  user=null; state={checks:{},custom:[],priority:[],medications:[]};
   setStatus("ログアウトしました");
   accountStatus.textContent="ログアウトしました。再ログインは次のログイン画面から行えます。";
   signOutBtn.classList.add("hidden");
@@ -489,6 +571,7 @@ function updateProgress(){
 
 function render(){
   renderPriority();
+  renderMedication();
   const wrap=document.getElementById("categories"); wrap.innerHTML="";
   const groups={};
   for(const item of allItems()) (groups[item.cat]??=[]).push(item);
@@ -519,6 +602,18 @@ function render(){
 }
 
 document.getElementById("date").textContent=new Intl.DateTimeFormat("ja-JP",{dateStyle:"full"}).format(new Date());
+
+document.getElementById("addMedicationBtn").onclick=async()=>{
+  const name=document.getElementById("newMedicationName").value.trim();
+  if(!name){alert("薬の名前を入力してください。");return;}
+  await addMedication({
+    name,
+    dose:document.getElementById("newMedicationDose").value.trim(),
+    timing:document.getElementById("newMedicationTiming").value.trim(),
+    note:document.getElementById("newMedicationNote").value.trim()
+  });
+  ["newMedicationName","newMedicationDose","newMedicationTiming","newMedicationNote"].forEach(id=>document.getElementById(id).value="");
+};
 
 document.getElementById("addPriorityBtn").onclick=async()=>{
   const input=document.getElementById("newPriorityText");

@@ -86,6 +86,22 @@
       </div>
     </section>
 
+    <section class="card medication-card">
+      <div class="section-head">
+        <h2>💊 服薬管理</h2>
+        <span class="muted small">追加・変更・削除できます</span>
+      </div>
+      <div id="medicationList" class="medication-list"></div>
+      <div class="medication-add form medication-form">
+        <input id="newMedicationName" placeholder="薬の名前">
+        <input id="newMedicationDose" placeholder="用量（例：1錠）">
+        <input id="newMedicationTiming" placeholder="服用タイミング（例：朝食後）">
+        <input id="newMedicationNote" placeholder="メモ（任意）">
+        <button id="addMedicationBtn">追加</button>
+      </div>
+      <p class="muted small">服用したらチェックできます。チェック状態は日付ごとに保存されます。</p>
+    </section>
+
     <section class="priority card">
       <div class="section-head">
         <h2>🌿 最優先</h2>
@@ -125,7 +141,7 @@
     </section>
   </main>
 
-  <footer>Supabase同期版 v0.5</footer>
+  <footer>Supabase同期版 v0.7</footer>
   <script type="module" src="app.js"></script>
 </body>
 </html>
