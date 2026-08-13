@@ -45,8 +45,6 @@ const base=[
 
 let supabaseReady=false, user=null;
 let state={checks:{}, custom:[]};
-const BASE_SENTINEL_CATEGORY="__system__";
-const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const day=()=>{
   const d=new Date();
   const y=d.getFullYear();
@@ -64,70 +62,15 @@ function setStatus(t){statusEl.textContent=t;}
 function setAuthMessage(t){document.getElementById("authMessage").textContent=t;}
 function setAnonAuthMessage(t){document.getElementById("anonAuthMessage").textContent=t;}
 
-function baseItems(){
-  const arr=[];
-  for(const [cat,items] of base) for(const [text,source] of items) arr.push({cat,text,source});
-  return arr;
-}
-
 function allItems(){
-  return state.custom.map(x=>({...x,id:`c:${x.id}`}));
-}
-
-async function insertRuleRow(userId,rule){
-  let res=await supabaseClient.from("custom_rules")
-    .insert({user_id:userId,text:rule.text,category:rule.cat,source:rule.source||""}).select().single();
-  // source列がまだ無い古いDBでも動くようにフォールバック
-  if(res.error && /source|column/i.test(res.error.message||"")){
-    res=await supabaseClient.from("custom_rules")
-      .insert({user_id:userId,text:rule.text,category:rule.cat}).select().single();
-  }
-  return res;
-}
-
-async function ensureBaseRules(){
-  if(!supabaseReady||!user)return;
-  const uid=user.id;
-  const marker=await supabaseClient.from("custom_rules").select("id").eq("user_id",uid)
-    .eq("category",BASE_SENTINEL_CATEGORY).eq("text",BASE_SENTINEL_TEXT).limit(1);
-  if(marker.error) throw marker.error;
-  if(marker.data?.length) return;
-
-  // 既存のチェック状態を退避して、初期ルールをアカウント管理のルールへ移行する。
-  const oldChecks=await supabaseClient.from("daily_check_states").select("item_id,checked")
-    .eq("user_id",uid).eq("check_date",day());
-  if(oldChecks.error) throw oldChecks.error;
-  const checked=new Map((oldChecks.data||[]).map(x=>[x.item_id,!!x.checked]));
-
-  const existing=await supabaseClient.from("custom_rules").select("id,text,category").eq("user_id",uid);
-  if(existing.error) throw existing.error;
-  const rows=existing.data||[];
-
-  for(const rule of baseItems()){
-    let found=rows.find(x=>x.text===rule.text && x.category===rule.cat);
-    if(!found){
-      const res=await insertRuleRow(uid,rule);
-      if(res.error) throw res.error;
-      found=res.data;
-      rows.push(found);
-    }
-    const oldId=`b:${rule.cat}:${rule.text}`;
-    if(checked.get(oldId)){
-      const res=await supabaseClient.from("daily_check_states").upsert({
-        user_id:uid,check_date:day(),item_id:`c:${found.id}`,checked:true
-      },{onConflict:"user_id,check_date,item_id"});
-      if(res.error) throw res.error;
-    }
-  }
-
-  const markerInsert=await supabaseClient.from("custom_rules")
-    .insert({user_id:uid,text:BASE_SENTINEL_TEXT,category:BASE_SENTINEL_CATEGORY});
-  if(markerInsert.error) throw markerInsert.error;
+  const arr=[];
+  for(const [cat,items] of base) for(const [text,source] of items) arr.push({cat,text,source,id:"b:"+cat+":"+text});
+  for(const x of state.custom) arr.push({...x,id:"c:"+x.id});
+  return arr;
 }
 
 async function loadCloud(){
   if(!supabaseReady||!user)return;
-  await ensureBaseRules();
   const d=day();
   const {data,error}=await supabaseClient.from("daily_check_states")
     .select("item_id,checked").eq("user_id",user.id).eq("check_date",d);
@@ -135,14 +78,9 @@ async function loadCloud(){
   state.checks={};
   for(const row of data||[]) state.checks[row.item_id]=row.checked;
 
-  let cr=await supabaseClient.from("custom_rules").select("id,text,category,source").eq("user_id",user.id).order("created_at");
-  if(cr.error && /source|column/i.test(cr.error.message||"")){
-    cr=await supabaseClient.from("custom_rules").select("id,text,category").eq("user_id",user.id).order("created_at");
-  }
+  const cr=await supabaseClient.from("custom_rules").select("id,text,category").eq("user_id",user.id).order("created_at");
   if(cr.error){console.error(cr.error); return;}
-  state.custom=(cr.data||[])
-    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT)
-    .map(x=>({id:x.id,text:x.text,cat:x.category,source:x.source||""}));
+  state.custom=(cr.data||[]).map(x=>({id:x.id,text:x.text,cat:x.category}));
 }
 
 async function saveCheck(itemId,checked){
@@ -317,96 +255,36 @@ async function logout(){
   signOutBtn.classList.add("hidden");
 }
 
-async function addCustom(text,cat,source="追加"){
+async function addCustom(text,cat){
   if(!supabaseReady||!user){alert("Supabaseに接続できていません。"); return;}
-  const {data,error}=await insertRuleRow(user.id,{text,cat,source});
+  const {data,error}=await supabaseClient.from("custom_rules")
+    .insert({user_id:user.id,text,category:cat}).select().single();
   if(error){alert(`追加に失敗しました：${error.message}`); return;}
-  state.custom.push({id:data.id,text:data.text,cat:data.category,source:data.source||source});
-  render();
-}
-
-async function editRule(ruleId){
-  if(!supabaseReady||!user){alert("Supabaseに接続できていません。"); return;}
-  const rule=state.custom.find(x=>String(x.id)===String(ruleId));
-  if(!rule)return;
-  const text=prompt("ルール内容を変更してください。",rule.text);
-  if(text===null)return;
-  const newText=text.trim();
-  if(!newText){alert("ルール内容を空にはできません。"); return;}
-  const category=prompt("カテゴリを変更できます。",rule.cat);
-  if(category===null)return;
-  const newCategory=category.trim();
-  if(!newCategory){alert("カテゴリを空にはできません。"); return;}
-  const source=prompt("担当・出典（不要なら空欄）",rule.source||"");
-  if(source===null)return;
-
-  let res=await supabaseClient.from("custom_rules").update({text:newText,category:newCategory,source:source.trim()})
-    .eq("id",rule.id).eq("user_id",user.id);
-  if(res.error && /source|column/i.test(res.error.message||"")){
-    res=await supabaseClient.from("custom_rules").update({text:newText,category:newCategory})
-      .eq("id",rule.id).eq("user_id",user.id);
-  }
-  if(res.error){alert(`変更に失敗しました：${res.error.message}`); return;}
-
-  const oldItemId=`c:${rule.id}`;
-  state.custom=state.custom.map(x=>String(x.id)===String(rule.id)
-    ? {...x,text:newText,cat:newCategory,source:source.trim()} : x);
-  // ルールIDは変えないのでチェック状態はそのまま維持されます。
-  if(state.checks[oldItemId]) state.checks[oldItemId]=true;
-  render();
-  setStatus("☁️ ルールを変更しました");
-}
-
-async function deleteRule(ruleId){
-  if(!supabaseReady||!user){alert("Supabaseに接続できていません。"); return;}
-  const rule=state.custom.find(x=>String(x.id)===String(ruleId));
-  if(!rule)return;
-  if(!confirm(`「${rule.text}」を削除しますか？\n\nこのルールはアカウントから削除されます。`))return;
-
-  const {error}=await supabaseClient.from("custom_rules")
-    .delete().eq("id",rule.id).eq("user_id",user.id);
-  if(error){alert(`削除に失敗しました：${error.message}`); return;}
-
-  const cleanup=await supabaseClient.from("daily_check_states")
-    .delete().eq("user_id",user.id).eq("item_id",`c:${rule.id}`);
-  if(cleanup.error) console.warn("チェック状態の削除に失敗しました：",cleanup.error);
-
-  delete state.checks[`c:${rule.id}`];
-  state.custom=state.custom.filter(x=>String(x.id)!==String(rule.id));
-  render();
-  setStatus("☁️ ルールを削除しました");
+  state.custom.push({id:data.id,text:data.text,cat:data.category}); render();
 }
 
 function updateProgress(){
   const items=allItems(), done=items.filter(x=>state.checks[x.id]).length;
   document.getElementById("progressText").textContent=`${done} / ${items.length}`;
-  document.getElementById("progressBar").style.width=(items.length ? done/items.length*100 : 0)+"%";
+  document.getElementById("progressBar").style.width=(done/items.length*100)+"%";
 }
 
 function render(){
   const wrap=document.getElementById("categories"); wrap.innerHTML="";
   const groups={};
-  for(const item of allItems()) (groups[item.cat]??=[]).push(item);
-  const icon=(cat)=>cat==="生活"?"🏠":cat==="職場・基本ルール"?"💼":cat==="出品ルール"?"📦":cat==="リタリコブログ"?"📝":cat==="今日の確認"?"⭐":"📌";
+  for(const [cat,items] of base) groups[cat]=items.map(([text,source])=>({text,source,id:"b:"+cat+":"+text}));
+  for(const x of state.custom){(groups[x.cat]??=[]).push({text:x.text,source:"追加",id:"c:"+x.id});}
   for(const [cat,items] of Object.entries(groups)){
     const sec=document.createElement("section"); sec.className="card category";
-    sec.innerHTML=`<h2>${icon(cat)} ${cat}</h2>`;
+    sec.innerHTML=`<h2>${cat==="生活"?"🏠":cat==="職場・基本ルール"?"💼":cat==="出品ルール"?"📦":cat==="リタリコブログ"?"📝":"⭐"} ${cat}</h2>`;
     for(const item of items){
-      const label=document.createElement("div"); label.className="check";
+      const label=document.createElement("label"); label.className="check";
       const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!state.checks[item.id];
       const div=document.createElement("div"); div.className="text"; div.textContent=item.text;
-      if(item.source){const src=document.createElement("small"); src.className="source"; src.textContent=`（${item.source}）`; div.appendChild(src);}
+      if(item.source){const s=document.createElement("small"); s.className="source"; s.textContent=`（${item.source}）`; div.appendChild(s);}
       if(cb.checked) label.classList.add("done");
       cb.onchange=async()=>{label.classList.toggle("done",cb.checked); await saveCheck(item.id,cb.checked); updateProgress();};
-      label.append(cb,div);
-
-      const actions=document.createElement("div"); actions.className="rule-actions";
-      const edit=document.createElement("button"); edit.type="button"; edit.className="edit-rule"; edit.textContent="変更"; edit.title="このルールを変更";
-      edit.onclick=async(e)=>{e.preventDefault(); e.stopPropagation(); await editRule(item.id.slice(2));};
-      const del=document.createElement("button"); del.type="button"; del.className="delete-rule"; del.textContent="削除"; del.title="このルールを削除";
-      del.onclick=async(e)=>{e.preventDefault(); e.stopPropagation(); await deleteRule(item.id.slice(2));};
-      actions.append(edit,del); label.appendChild(actions);
-      sec.appendChild(label);
+      label.append(cb,div); sec.appendChild(label);
     }
     wrap.appendChild(sec);
   }
