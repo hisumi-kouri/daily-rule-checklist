@@ -43,6 +43,19 @@
             <button id="setPasswordBtn">パスワードを設定</button>
           </div>
         </div>
+
+        <div class="account-action login-box">
+          <h3>🔑 すでにアカウントをお持ちの方</h3>
+          <p class="muted small">登録済みのメールアドレスとパスワードでログインできます。ログイン後、この端末の未同期データも引き継げます。</p>
+          <div class="form">
+            <input id="loginEmail" type="email" placeholder="登録済みメールアドレス">
+            <input id="loginPassword" type="password" placeholder="パスワード">
+            <button id="loginBtn">ログイン</button>
+          </div>
+          <button id="loginResetBtn" class="secondary">パスワードを忘れた場合</button>
+        </div>
+
+        <p id="anonAuthMessage" class="auth-message"></p>
       </div>
 
       <div id="loggedInPanel" class="hidden">

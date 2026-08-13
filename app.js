@@ -60,6 +60,7 @@ const signOutBtn=document.getElementById("signOutBtn");
 
 function setStatus(t){statusEl.textContent=t;}
 function setAuthMessage(t){document.getElementById("authMessage").textContent=t;}
+function setAnonAuthMessage(t){document.getElementById("anonAuthMessage").textContent=t;}
 
 function allItems(){
   const arr=[];
@@ -124,11 +125,96 @@ async function ensureSession(){
   render();
 }
 
+async function migrateAnonymousDataTo(targetUserId, anonymousState){
+  if(!anonymousState) return;
+
+  // チェック済みだけを移行。既存アカウント側の未チェック状態を上書きしない。
+  const checkedRows=Object.entries(anonymousState.checks||{})
+    .filter(([,checked])=>checked)
+    .map(([item_id])=>({
+      user_id:targetUserId,
+      check_date:day(),
+      item_id,
+      checked:true
+    }));
+
+  if(checkedRows.length){
+    const {error}=await supabaseClient.from("daily_check_states")
+      .upsert(checkedRows,{onConflict:"user_id,check_date,item_id"});
+    if(error) throw error;
+  }
+
+  // 追加ルールは同じカテゴリ・本文が無いものだけ移行。
+  for(const item of anonymousState.custom||[]){
+    const {data:existing,error:findError}=await supabaseClient.from("custom_rules")
+      .select("id").eq("user_id",targetUserId).eq("text",item.text).eq("category",item.cat).limit(1);
+    if(findError) throw findError;
+    if(!existing?.length){
+      const {error}=await supabaseClient.from("custom_rules")
+        .insert({user_id:targetUserId,text:item.text,category:item.cat});
+      if(error) throw error;
+    }
+  }
+}
+
+async function loginExistingAccount(){
+  const email=document.getElementById("loginEmail").value.trim();
+  const password=document.getElementById("loginPassword").value;
+  if(!email||!password){setAnonAuthMessage("メールアドレスとパスワードを入力してください。"); return;}
+
+  const previousUser=user;
+  const previousState={
+    checks:{...state.checks},
+    custom:[...(state.custom||[])]
+  };
+
+  setAnonAuthMessage("ログインしています…");
+  const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});
+  if(error){
+    setAnonAuthMessage(`ログインできませんでした：${error.message}`);
+    return;
+  }
+
+  user=data.user;
+  supabaseReady=true;
+  setStatus("☁️ クラウド同期中");
+
+  try{
+    if(previousUser?.is_anonymous && previousUser.id!==user.id){
+      await migrateAnonymousDataTo(user.id,previousState);
+    }
+    await updateAccountUI();
+    await loadCloud();
+    render();
+    setAuthMessage("ログインしました。PC・スマホで同じデータを利用できます。");
+    setAnonAuthMessage("");
+  }catch(e){
+    console.error(e);
+    setAuthMessage(`ログイン後のデータ同期に失敗しました：${e.message}`);
+  }
+}
+
+async function sendLoginPasswordReset(){
+  const email=document.getElementById("loginEmail").value.trim();
+  if(!email){setAnonAuthMessage("登録済みのメールアドレスを入力してください。"); return;}
+  const redirectTo=window.location.href.split("#")[0];
+  const {error}=await supabaseClient.auth.resetPasswordForEmail(email,{redirectTo});
+  if(error){setAnonAuthMessage(`再設定メールを送れませんでした：${error.message}`); return;}
+  setAnonAuthMessage("パスワード再設定メールを送りました。メールを確認してください。");
+}
+
 async function linkEmail(){
   const email=document.getElementById("linkEmail").value.trim();
   if(!email){alert("メールアドレスを入力してください。"); return;}
   const {error}=await supabaseClient.auth.updateUser({email});
-  if(error){alert(error.message); return;}
+  if(error){
+    if(String(error.message||"").toLowerCase().includes("already been registered") || String(error.message||"").includes("already registered")){
+      setAnonAuthMessage("このメールアドレスは既に登録されています。「すでにアカウントをお持ちの方」からログインしてください。");
+    }else{
+      setAnonAuthMessage(error.message);
+    }
+    return;
+  }
   document.getElementById("passwordPanel").classList.remove("hidden");
   setAuthMessage("確認メールを送りました。メールの確認が完了してから、パスワードを設定してください。");
   accountStatus.textContent=`確認待ち：${email}`;
@@ -222,6 +308,8 @@ document.getElementById("resetBtn").onclick=async()=>{
 
 document.getElementById("linkEmailBtn").onclick=linkEmail;
 document.getElementById("setPasswordBtn").onclick=setPassword;
+document.getElementById("loginBtn").onclick=loginExistingAccount;
+document.getElementById("loginResetBtn").onclick=sendLoginPasswordReset;
 document.getElementById("changePasswordBtn").onclick=changePassword;
 document.getElementById("resetPasswordBtn").onclick=sendPasswordReset;
 document.getElementById("signOutBtn").onclick=logout;
