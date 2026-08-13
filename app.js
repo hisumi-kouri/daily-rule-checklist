@@ -5,37 +5,6 @@ const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const base=[
-["生活",[
-["睡眠薬を毎日飲む","須摩さん"],
-["遅刻した時は午後から出勤してもよい（毎日遅刻にならないよう注意）","須摩さん"],
-["人が通る道などの犬のふんは掃除する","須摩さん"],
-["高松さんへ週1回メールを送る","須摩さん"]
-]],
-["職場・基本ルール",[
-["指示を受けたら、覚えているうちにチャッピーへ送る","須摩さん"],
-["利用者へ直接指示しない","須摩さん"],
-["利用者へ伝えたいことは必ず職員を通す","須摩さん"],
-["再撮影の報告はメモをして、まとめて職員へ伝える","須摩さん"],
-["緊急性のない質問はチャットワークで","石川さん"],
-["急ぎではない連絡は、その場ですぐ対応しなくてもよい","石川さん"],
-["個人面談中はチャットワークを送らない","石川さん"],
-["勝手に判断せず、迷ったら職員へ確認する","石川さん"],
-["ミスのフィードバックはすぐにする","石川さん"],
-["外界の音が気になる時はイヤフォンを使ってよい","石川さん"]
-]],
-["出品ルール",[
-["miniプリンターの管理番号はM00233（旧M00227）","石川さん"],
-["同じ商品は「状態A」「状態B」などで区別する","安井さん・須摩さん"],
-["分からないものは飛ばして、出品できるものから進める","石川さん"],
-["質問するときは具体的な数を言ってから、どのくらいかを聞く","石川さん"],
-["3回再出品してから値下げする","石川さん"]
-]],
-["リタリコブログ",[
-["まず自分で文章を打つ","石川さん"],
-["文章をチャッピーに整えてもらう","石川さん"],
-["整えた文章を職員に見せる","石川さん"],
-["改行・画像挿入を行う","石川さん"]
-]],
 ["今日の確認",[
 ["体調 → 生活 → 仕事の順番を守った","きくながさん"],
 ["困った時に勝手に判断しなかった",""],
@@ -101,6 +70,21 @@ async function insertRuleRow(userId,rule){
       .insert({user_id:userId,text:rule.text,category:rule.cat}).select().single();
   }
   return res;
+}
+
+const REMOVED_CATEGORIES=["生活","職場・基本ルール","出品ルール","リタリコブログ"];
+async function removeDeletedCategories(){
+  if(!supabaseReady||!user)return;
+  const uid=user.id;
+  const res=await supabaseClient.from("custom_rules").select("id,category").eq("user_id",uid).in("category",REMOVED_CATEGORIES);
+  if(res.error) throw res.error;
+  const ids=(res.data||[]).map(x=>`c:${x.id}`);
+  if(ids.length){
+    const delChecks=await supabaseClient.from("daily_check_states").delete().eq("user_id",uid).in("item_id",ids);
+    if(delChecks.error) throw delChecks.error;
+  }
+  const delRules=await supabaseClient.from("custom_rules").delete().eq("user_id",uid).in("category",REMOVED_CATEGORIES);
+  if(delRules.error) throw delRules.error;
 }
 
 async function ensureBaseRules(){
@@ -247,6 +231,7 @@ function renderMedication(){
 
 async function loadCloud(){
   if(!supabaseReady||!user)return;
+  await removeDeletedCategories();
   await ensureBaseRules();
   await ensurePriorityRules();
   const d=day();
