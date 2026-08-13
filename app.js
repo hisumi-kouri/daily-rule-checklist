@@ -658,6 +658,23 @@ function render(){
 
 document.getElementById("date").textContent=new Intl.DateTimeFormat("ja-JP",{dateStyle:"full"}).format(new Date());
 
+document.getElementById("newCategory").addEventListener("change",(e)=>{
+  if(e.target.value !== "__custom__") return;
+  const current=[...e.target.options].find(o=>o.value !== "__custom__" && o.selected)?.text || "";
+  const name=prompt("新しいカテゴリ名を入力してください。", current);
+  if(name && name.trim()){
+    const value=name.trim();
+    const exists=[...e.target.options].find(o=>o.value===value);
+    if(!exists){
+      const opt=document.createElement("option"); opt.value=value; opt.textContent=value;
+      e.target.insertBefore(opt,e.target.querySelector('option[value="__custom__"]'));
+    }
+    e.target.value=value;
+  } else {
+    e.target.value=e.target.options[0]?.value || "生活";
+  }
+});
+
 document.getElementById("addMedicationBtn").onclick=async()=>{
   const name=document.getElementById("newMedicationName").value.trim();
   if(!name){alert("薬の名前を入力してください。");return;}
