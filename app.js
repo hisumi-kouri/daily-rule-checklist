@@ -776,6 +776,7 @@ function renderAchievementChart(points){
 }
 
 function render(){
+  refreshCategoryOptions();
   renderPriority();
   renderUrges();
   renderDailyParameters();
@@ -783,8 +784,12 @@ function render(){
   const wrap=document.getElementById("categories"); wrap.innerHTML="";
   const groups={};
   for(const item of allItems()) (groups[item.cat]??=[]).push(item);
-  const icon=(cat)=>cat==="生活"?"🏠":cat==="職場・基本ルール"?"💼":cat==="出品ルール"?"📦":cat==="リタリコブログ"?"📝":"📌";
-  for(const [cat,items] of Object.entries(groups)){
+  const fixedOrder=["基本","生活","職場","今日の振り返り"];
+  const orderedCats=[...fixedOrder,...Object.keys(groups).filter(cat=>!fixedOrder.includes(cat))];
+  const icon=(cat)=>cat==="生活"?"🏠":cat==="職場"?"💼":cat==="基本"?"📌":cat==="今日の振り返り"?"📝":"📂";
+  for(const cat of orderedCats){
+    const items=groups[cat]||[]; 
+    if(!items.length) continue;
     const sec=document.createElement("section"); sec.className="card category";
     sec.innerHTML=`<h2>${icon(cat)} ${cat}</h2>`;
     for(const item of items){
@@ -807,6 +812,32 @@ function render(){
     wrap.appendChild(sec);
   }
   updateProgress();
+}
+
+// タブ切り替え：今日のチェックシートにルール一覧とルール追加を集約
+const checksheetTab=document.getElementById("checksheetTab");
+const recordTab=document.getElementById("recordTab");
+const categoriesEl=document.getElementById("categories");
+const addRulesEl=document.querySelector("section.add");
+if(checksheetTab && categoriesEl && addRulesEl){
+  checksheetTab.appendChild(categoriesEl);
+  checksheetTab.appendChild(addRulesEl);
+}
+function switchAppTab(name){
+  document.querySelectorAll(".app-tab").forEach(btn=>btn.classList.toggle("active",btn.dataset.tab===name));
+  checksheetTab?.classList.toggle("active",name==="checksheet");
+  recordTab?.classList.toggle("active",name==="record");
+}
+document.querySelectorAll(".app-tab").forEach(btn=>btn.addEventListener("click",()=>switchAppTab(btn.dataset.tab)));
+const checksheetDate=document.getElementById("checksheetDate");
+if(checksheetDate) checksheetDate.textContent=new Intl.DateTimeFormat("ja-JP",{dateStyle:"full"}).format(new Date());
+function refreshCategoryOptions(){
+  const select=document.getElementById("newCategory"); if(!select)return;
+  const current=select.value;
+  const names=["基本","生活","職場","今日の振り返り",...(state.custom||[]).map(x=>x.cat)];
+  const unique=[...new Set(names)].filter(x=>x && !["__custom__","__system__","__priority__","__medication__","__daily_parameters__"].includes(x));
+  select.innerHTML=unique.map(x=>`<option value="${x.replaceAll('"','&quot;')}">${x}</option>`).join("")+`<option value="__custom__">✏️ 自由入力</option>`;
+  if([...select.options].some(o=>o.value===current)) select.value=current;
 }
 
 document.getElementById("date").textContent=new Intl.DateTimeFormat("ja-JP",{dateStyle:"full"}).format(new Date());

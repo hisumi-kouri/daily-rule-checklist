@@ -19,7 +19,18 @@
     <div class="header-actions"><button id="printBtn" class="ghost">🖨️ PDF / 印刷</button><button id="resetBtn" class="ghost">今日をリセット</button></div>
   </header>
 
+  <nav class="app-tabs" aria-label="アプリ内メニュー">
+    <button type="button" class="app-tab active" data-tab="checksheet">📋 今日のチェックシート</button>
+    <button type="button" class="app-tab" data-tab="record">📊 記録・分析</button>
+  </nav>
+
   <main>
+    <div id="checksheetTab" class="tab-panel active">
+      <section class="card checksheet-head">
+        <div class="section-head"><div><h2>📋 今日のチェックシート</h2><p class="muted">基本・生活・職場・今日の振り返りを確認します。</p></div><span id="checksheetDate" class="muted small"></span></div>
+      </section>
+    </div>
+    <div id="recordTab" class="tab-panel">
     <section class="card account-card">
       <div class="account-head">
         <div>
@@ -201,9 +212,10 @@
         <button id="addBtn">追加</button>
       </div>
     </section>
+    </div>
   </main>
 
-  <footer>Supabase同期版 v0.16</footer>
+  <footer>Supabase同期版 v0.17</footer>
   <script type="module" src="app.js"></script>
 </body>
 </html>
