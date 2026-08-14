@@ -12,6 +12,7 @@ const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
 const LIFE_RULES_SENTINEL_TEXT="__life_rules_initialized_v1__";
+const WORK_RULES_SENTINEL_TEXT="__work_rules_initialized_v1__";
 const DEFAULT_LIFE_RULES=[
   {text:"朝薬を飲んだ",source:""},
   {text:"昼薬を飲んだ",source:""},
@@ -19,7 +20,7 @@ const DEFAULT_LIFE_RULES=[
   {text:"就寝薬を飲んだ",source:""},
   {text:"頓服を飲んだ",source:"頓服を飲んだ場合は、必要に応じて補足を入力できます。"}
 ];
-const NON_ACHIEVEMENT_RULES=new Set(["頓服を飲んだ"]);
+const NON_ACHIEVEMENT_RULES=new Set(["頓服を飲んだ","高松さんへの週１回の近状メールを送る"]);
 const DEFAULT_BASIC_RULES=[
   "睡眠薬を飲んだ",
   "遅刻しそうな時は午後から出勤する",
@@ -187,6 +188,57 @@ async function ensureLifeRules(){
   }
   const markerInsert=await supabaseClient.from("custom_rules")
     .insert({user_id:uid,text:LIFE_RULES_SENTINEL_TEXT,category:BASE_SENTINEL_CATEGORY});
+  if(markerInsert.error) throw markerInsert.error;
+}
+
+async function ensureAdditionalWorkRules(){
+  if(!supabaseReady||!user)return;
+  const uid=user.id;
+  const additionalRules=[
+    "ミスはすぐに報告",
+    "勝手に判断しない",
+    "３回出品してから値下げ",
+    "外界の音が気になる時はイヤフォンの使用可"
+  ];
+  const existing=await supabaseClient.from("custom_rules").select("id,text,category").eq("user_id",uid).eq("category","職場");
+  if(existing.error) throw existing.error;
+  const rows=existing.data||[];
+  for(const text of additionalRules){
+    if(rows.some(x=>x.text===text)) continue;
+    const res=await insertRuleRow(uid,{text,cat:"職場",source:""});
+    if(res.error) throw res.error;
+    rows.push(res.data);
+  }
+}
+
+async function ensureWorkRules(){
+  if(!supabaseReady||!user)return;
+  const uid=user.id;
+  const marker=await supabaseClient.from("custom_rules").select("id").eq("user_id",uid)
+    .eq("category",BASE_SENTINEL_CATEGORY).eq("text",WORK_RULES_SENTINEL_TEXT).limit(1);
+  if(marker.error) throw marker.error;
+  if(marker.data?.length) return;
+  const defaultRules=[
+    "指示を受けたらチャッピーに送る",
+    "利用者への直接指示はしない",
+    "職員を通して伝える",
+    "ヤフオクの再撮影はまとめて伝える",
+    "全体共有チャットを利用",
+    "個人面談中は送信しない",
+    "分からない商品は飛ばす",
+    "質問はまとめて質問"
+  ];
+  const existing=await supabaseClient.from("custom_rules").select("id,text,category").eq("user_id",uid);
+  if(existing.error) throw existing.error;
+  const rows=existing.data||[];
+  for(const text of defaultRules){
+    if(rows.some(x=>x.text===text && x.category==="職場")) continue;
+    const res=await insertRuleRow(uid,{text,cat:"職場",source:""});
+    if(res.error) throw res.error;
+    rows.push(res.data);
+  }
+  const markerInsert=await supabaseClient.from("custom_rules")
+    .insert({user_id:uid,text:WORK_RULES_SENTINEL_TEXT,category:BASE_SENTINEL_CATEGORY});
   if(markerInsert.error) throw markerInsert.error;
 }
 
@@ -364,6 +416,8 @@ async function loadCloud(){
   await ensureBaseRules();
   await ensureBasicRules();
   await ensureLifeRules();
+  await ensureWorkRules();
+  await ensureAdditionalWorkRules();
   await ensurePriorityRules();
   const d=day();
   const {data,error}=await supabaseClient.from("daily_check_states")
