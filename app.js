@@ -10,7 +10,7 @@ let supabaseReady=false, user=null;
 let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
-const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v1__";
+const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
 const DEFAULT_BASIC_RULES=[
   "睡眠薬を飲んだ",
   "遅刻しそうな時は午後から出勤する",
