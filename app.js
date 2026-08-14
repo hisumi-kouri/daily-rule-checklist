@@ -13,6 +13,7 @@ const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
 const LIFE_RULES_SENTINEL_TEXT="__life_rules_initialized_v1__";
 const WORK_RULES_SENTINEL_TEXT="__work_rules_initialized_v1__";
+const REVIEW_RULES_SENTINEL_TEXT="__review_rules_initialized_v1__";
 const DEFAULT_LIFE_RULES=[
   {text:"朝薬を飲んだ",source:""},
   {text:"昼薬を飲んだ",source:""},
@@ -242,6 +243,28 @@ async function ensureWorkRules(){
   if(markerInsert.error) throw markerInsert.error;
 }
 
+
+async function ensureReviewRules(){
+  if(!supabaseReady||!user)return;
+  const uid=user.id;
+  const marker=await supabaseClient.from("custom_rules").select("id").eq("user_id",uid)
+    .eq("category",BASE_SENTINEL_CATEGORY).eq("text",REVIEW_RULES_SENTINEL_TEXT).limit(1);
+  if(marker.error) throw marker.error;
+  if(marker.data?.length) return;
+  const existing=await supabaseClient.from("custom_rules").select("id,text,category").eq("user_id",uid);
+  if(existing.error) throw existing.error;
+  const rows=existing.data||[];
+  const rules=["約束を守れた","職員に相談できた"];
+  for(const text of rules){
+    if(rows.some(x=>x.text===text && x.category==="今日の振り返り")) continue;
+    const res=await insertRuleRow(uid,{text,cat:"今日の振り返り",source:""});
+    if(res.error) throw res.error;
+    rows.push(res.data);
+  }
+  const markerInsert=await supabaseClient.from("custom_rules").insert({user_id:uid,text:REVIEW_RULES_SENTINEL_TEXT,category:BASE_SENTINEL_CATEGORY});
+  if(markerInsert.error) throw markerInsert.error;
+}
+
 async function ensurePriorityRules(){
   if(!supabaseReady||!user)return;
   const uid=user.id;
@@ -418,6 +441,7 @@ async function loadCloud(){
   await ensureLifeRules();
   await ensureWorkRules();
   await ensureAdditionalWorkRules();
+  await ensureReviewRules();
   await ensurePriorityRules();
   const d=day();
   const {data,error}=await supabaseClient.from("daily_check_states")
