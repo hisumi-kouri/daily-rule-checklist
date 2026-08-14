@@ -171,13 +171,16 @@ async function ensureLifeRules(){
     .eq("category",BASE_SENTINEL_CATEGORY).eq("text",LIFE_RULES_SENTINEL_TEXT).limit(1);
   if(marker.error) throw marker.error;
   if(marker.data?.length) return;
-  const existing=await supabaseClient.from("custom_rules").select("id,text,category,source").eq("user_id",uid);
+  let existing=await supabaseClient.from("custom_rules").select("id,text,category,source").eq("user_id",uid);
+  if(existing.error && /source|column/i.test(existing.error.message||"")){
+    existing=await supabaseClient.from("custom_rules").select("id,text,category").eq("user_id",uid);
+  }
   if(existing.error) throw existing.error;
   const rows=existing.data||[];
   for(const rule of DEFAULT_LIFE_RULES){
     let found=rows.find(x=>x.text===rule.text && x.category==="生活");
     if(!found){
-      const res=await insertRuleRow(uid,{text:rule.text,cat:"生活",source:rule.source});
+      const res=await insertRuleRow(uid,{text:rule.text,cat:"生活",source:rule.source||""});
       if(res.error) throw res.error;
       found=res.data; rows.push(found);
     }
