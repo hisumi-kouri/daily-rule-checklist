@@ -13,8 +13,7 @@ const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
 const LIFE_RULES_SENTINEL_TEXT="__life_rules_initialized_v1__";
 const WORK_RULES_SENTINEL_TEXT="__work_rules_initialized_v1__";
-const REVIEW_RULES_SENTINEL_TEXT="__review_rules_initialized_v1__";
-const HOUSEWORK_RULES_SENTINEL_TEXT="__housework_rules_initialized_v1__";
+const MEDICAL_RULES_SENTINEL_TEXT="__medical_rules_initialized_v1__";
 const DEFAULT_LIFE_RULES=[
   {text:"朝薬を飲んだ",source:""},
   {text:"昼薬を飲んだ",source:""},
@@ -22,7 +21,7 @@ const DEFAULT_LIFE_RULES=[
   {text:"就寝薬を飲んだ",source:""},
   {text:"頓服を飲んだ",source:"頓服を飲んだ場合は、必要に応じて補足を入力できます。"}
 ];
-const NON_ACHIEVEMENT_RULES=new Set(["頓服を飲んだ","高松さんへの週１回の近状メールを送る"]);
+const NON_ACHIEVEMENT_RULES=new Set(["頓服を飲んだ","高松さんへの週１回の近状メールを送る","訪問看護とまとめた内容をチャッピーに入力","先生にきちんと見せる","３回出品してから値下げ"]);
 const DEFAULT_BASIC_RULES=[
   "睡眠薬を飲んだ",
   "遅刻しそうな時は午後から出勤する",
@@ -244,47 +243,25 @@ async function ensureWorkRules(){
   if(markerInsert.error) throw markerInsert.error;
 }
 
-
-async function ensureHouseworkRules(){
+async function ensureMedicalRules(){
   if(!supabaseReady||!user)return;
   const uid=user.id;
   const marker=await supabaseClient.from("custom_rules").select("id").eq("user_id",uid)
-    .eq("category",BASE_SENTINEL_CATEGORY).eq("text",HOUSEWORK_RULES_SENTINEL_TEXT).limit(1);
+    .eq("category",BASE_SENTINEL_CATEGORY).eq("text",MEDICAL_RULES_SENTINEL_TEXT).limit(1);
   if(marker.error) throw marker.error;
   if(marker.data?.length) return;
-  const rules=["皿洗いができた","洗濯ができた","洗濯物を干せた","夕ご飯を自分で作れた"];
-  const existing=await supabaseClient.from("custom_rules").select("id,text,category").eq("user_id",uid);
+  const rules=["訪問看護とまとめた内容をチャッピーに入力","先生にきちんと見せる"];
+  const existing=await supabaseClient.from("custom_rules").select("id,text,category").eq("user_id",uid).eq("category","通院");
   if(existing.error) throw existing.error;
   const rows=existing.data||[];
   for(const text of rules){
-    if(rows.some(x=>x.text===text && x.category==="家事")) continue;
-    const res=await insertRuleRow(uid,{text,cat:"家事",source:""});
+    if(rows.some(x=>x.text===text)) continue;
+    const res=await insertRuleRow(uid,{text,cat:"通院",source:""});
     if(res.error) throw res.error;
     rows.push(res.data);
   }
   const markerInsert=await supabaseClient.from("custom_rules")
-    .insert({user_id:uid,text:HOUSEWORK_RULES_SENTINEL_TEXT,category:BASE_SENTINEL_CATEGORY});
-  if(markerInsert.error) throw markerInsert.error;
-}
-
-async function ensureReviewRules(){
-  if(!supabaseReady||!user)return;
-  const uid=user.id;
-  const marker=await supabaseClient.from("custom_rules").select("id").eq("user_id",uid)
-    .eq("category",BASE_SENTINEL_CATEGORY).eq("text",REVIEW_RULES_SENTINEL_TEXT).limit(1);
-  if(marker.error) throw marker.error;
-  if(marker.data?.length) return;
-  const existing=await supabaseClient.from("custom_rules").select("id,text,category").eq("user_id",uid);
-  if(existing.error) throw existing.error;
-  const rows=existing.data||[];
-  const rules=["約束を守れた","職員に相談できた"];
-  for(const text of rules){
-    if(rows.some(x=>x.text===text && x.category==="今日の振り返り")) continue;
-    const res=await insertRuleRow(uid,{text,cat:"今日の振り返り",source:""});
-    if(res.error) throw res.error;
-    rows.push(res.data);
-  }
-  const markerInsert=await supabaseClient.from("custom_rules").insert({user_id:uid,text:REVIEW_RULES_SENTINEL_TEXT,category:BASE_SENTINEL_CATEGORY});
+    .insert({user_id:uid,text:MEDICAL_RULES_SENTINEL_TEXT,category:BASE_SENTINEL_CATEGORY});
   if(markerInsert.error) throw markerInsert.error;
 }
 
@@ -464,8 +441,7 @@ async function loadCloud(){
   await ensureLifeRules();
   await ensureWorkRules();
   await ensureAdditionalWorkRules();
-  await ensureReviewRules();
-  await ensureHouseworkRules();
+  await ensureMedicalRules();
   await ensurePriorityRules();
   const d=day();
   const {data,error}=await supabaseClient.from("daily_check_states")
@@ -968,7 +944,8 @@ function render(){
     {name:"基本",icon:"📌",cats:["基本"]},
     {name:"生活",icon:"🏠",cats:["生活"]},
     {name:"職場",icon:"💼",cats:["職場"]},
-    {name:"今日の振り返り",icon:"📝",cats:["今日の振り返り"]}
+    {name:"今日の振り返り",icon:"📝",cats:["今日の振り返り"]},
+    {name:"通院",icon:"🏥",cats:["通院"]}
   ];
   // 自由入力で追加されたカテゴリーも「その他」にまとめず、独立したグループとして表示
   const fixedCats=new Set(groupDefs.flatMap(g=>g.cats));
@@ -1033,7 +1010,7 @@ if(checksheetDate) checksheetDate.textContent=new Intl.DateTimeFormat("ja-JP",{d
 function refreshCategoryOptions(){
   const select=document.getElementById("newCategory"); if(!select)return;
   const current=select.value;
-  const names=["基本","生活","職場","今日の振り返り",...(state.custom||[]).map(x=>x.cat)];
+  const names=["基本","生活","職場","今日の振り返り","通院",...(state.custom||[]).map(x=>x.cat)];
   const unique=[...new Set(names)].filter(x=>x && !["__custom__","__system__","__priority__","__medication__","__daily_parameters__"].includes(x));
   select.innerHTML=unique.map(x=>`<option value="${x.replaceAll('"','&quot;')}">${x}</option>`).join("")+`<option value="__custom__">✏️ 自由入力</option>`;
   if([...select.options].some(o=>o.value===current)) select.value=current;
