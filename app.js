@@ -14,6 +14,7 @@ const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
 const LIFE_RULES_SENTINEL_TEXT="__life_rules_initialized_v1__";
 const WORK_RULES_SENTINEL_TEXT="__work_rules_initialized_v1__";
 const REVIEW_RULES_SENTINEL_TEXT="__review_rules_initialized_v1__";
+const HOUSEWORK_RULES_SENTINEL_TEXT="__housework_rules_initialized_v1__";
 const DEFAULT_LIFE_RULES=[
   {text:"朝薬を飲んだ",source:""},
   {text:"昼薬を飲んだ",source:""},
@@ -244,6 +245,28 @@ async function ensureWorkRules(){
 }
 
 
+async function ensureHouseworkRules(){
+  if(!supabaseReady||!user)return;
+  const uid=user.id;
+  const marker=await supabaseClient.from("custom_rules").select("id").eq("user_id",uid)
+    .eq("category",BASE_SENTINEL_CATEGORY).eq("text",HOUSEWORK_RULES_SENTINEL_TEXT).limit(1);
+  if(marker.error) throw marker.error;
+  if(marker.data?.length) return;
+  const rules=["皿洗いができた","洗濯ができた","洗濯物を干せた","夕ご飯を自分で作れた"];
+  const existing=await supabaseClient.from("custom_rules").select("id,text,category").eq("user_id",uid);
+  if(existing.error) throw existing.error;
+  const rows=existing.data||[];
+  for(const text of rules){
+    if(rows.some(x=>x.text===text && x.category==="家事")) continue;
+    const res=await insertRuleRow(uid,{text,cat:"家事",source:""});
+    if(res.error) throw res.error;
+    rows.push(res.data);
+  }
+  const markerInsert=await supabaseClient.from("custom_rules")
+    .insert({user_id:uid,text:HOUSEWORK_RULES_SENTINEL_TEXT,category:BASE_SENTINEL_CATEGORY});
+  if(markerInsert.error) throw markerInsert.error;
+}
+
 async function ensureReviewRules(){
   if(!supabaseReady||!user)return;
   const uid=user.id;
@@ -442,6 +465,7 @@ async function loadCloud(){
   await ensureWorkRules();
   await ensureAdditionalWorkRules();
   await ensureReviewRules();
+  await ensureHouseworkRules();
   await ensurePriorityRules();
   const d=day();
   const {data,error}=await supabaseClient.from("daily_check_states")
