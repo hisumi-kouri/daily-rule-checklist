@@ -791,6 +791,13 @@ function render(){
     {name:"職場",icon:"💼",cats:["職場"]},
     {name:"今日の振り返り",icon:"📝",cats:["今日の振り返り"]}
   ];
+  // 自由入力で追加されたカテゴリーも「その他」にまとめず、独立したグループとして表示
+  const fixedCats=new Set(groupDefs.flatMap(g=>g.cats));
+  for(const cat of Object.keys(groups)){
+    if(!fixedCats.has(cat) && !["__priority__","__medication__","__daily_parameters__"].includes(cat)){
+      groupDefs.push({name:cat,icon:"📂",cats:[cat]});
+    }
+  }
   const used=new Set();
   const renderRule=(item)=>{
     const label=document.createElement("div"); label.className="check";
@@ -817,14 +824,7 @@ function render(){
     items.forEach(item=>sec.appendChild(renderRule(item)));
     wrap.appendChild(sec);
   }
-  const otherCats=Object.keys(groups).filter(cat=>!used.has(cat));
-  for(const cat of otherCats){
-    const items=groups[cat]||[]; if(!items.length)continue;
-    const sec=document.createElement("section"); sec.className="card category rule-group other-group";
-    sec.innerHTML=`<div class="group-title"><h2>📂 ${cat}</h2><span class="group-count">${items.length}項目</span></div>`;
-    items.forEach(item=>sec.appendChild(renderRule(item)));
-    wrap.appendChild(sec);
-  }
+
   updateProgress();
 }
 // タブ切り替え：今日のチェックシートにルール一覧とルール追加を集約
