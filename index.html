@@ -158,6 +158,36 @@
       <p class="muted small">この記録は通常のルール達成率には含めません。</p>
     </section>
 
+    <section class="card parameter-card">
+      <div class="section-head">
+        <h2>📝 その他パラメーター</h2>
+        <span class="muted small">今日の状態を記録できます</span>
+      </div>
+      <div class="parameter-group">
+        <label for="sleepHours">😴 睡眠時間</label>
+        <div class="parameter-inline">
+          <input id="sleepHours" type="number" min="0" max="24" step="0.5" placeholder="例：7.5">
+          <span>時間</span>
+        </div>
+      </div>
+      <div class="parameter-group">
+        <p class="parameter-label">症状・体験（当てはまるものにチェック）</p>
+        <div class="parameter-checks">
+          <label><input type="checkbox" id="hallucinationVisual"> 幻視</label>
+          <label><input type="checkbox" id="hallucinationAuditory"> 幻聴</label>
+          <label><input type="checkbox" id="hallucinationTactile"> 幻触</label>
+          <label><input type="checkbox" id="delusionPersecution"> 被害妄想</label>
+          <label><input type="checkbox" id="hallucinationOther"> 幻覚（その他）</label>
+        </div>
+      </div>
+      <div class="parameter-group">
+        <label for="parameterNote">補足</label>
+        <textarea id="parameterNote" rows="5" maxlength="2000" placeholder="今日の状態について自由に入力できます"></textarea>
+      </div>
+      <button type="button" id="saveParametersBtn" class="parameter-save">💾 その他パラメーターを保存</button>
+      <p id="parameterStatus" class="muted small"></p>
+    </section>
+
     <div id="categories"></div>
 
     <section class="card add">
@@ -173,7 +203,7 @@
     </section>
   </main>
 
-  <footer>Supabase同期版 v0.15</footer>
+  <footer>Supabase同期版 v0.16</footer>
   <script type="module" src="app.js"></script>
 </body>
 </html>

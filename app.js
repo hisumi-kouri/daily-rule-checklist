@@ -7,12 +7,13 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 const base=[];
 
 let supabaseReady=false, user=null;
-let state={checks:{}, custom:[], priority:[], medications:[]};
+let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const PRIORITY_CATEGORY="__priority__";
 const PRIORITY_SENTINEL_TEXT="__priority_initialized_v1__";
 const MEDICATION_CATEGORY="__medication__";
+const DAILY_PARAMETER_CATEGORY="__daily_parameters__";
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
 const URGE_TYPES=[
   {id:"vanish",label:"消えたい衝動"},
@@ -227,6 +228,72 @@ function renderMedication(){
   }
 }
 
+
+async function loadDailyParameters(){
+  state.parameters={sleepHours:"",hallucinations:[],note:""};
+  state.parameterRowId=null;
+  if(!supabaseReady||!user)return;
+  let res=await supabaseClient.from("custom_rules").select("id,text,category")
+    .eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY).order("created_at",{ascending:false}).limit(1);
+  if(res.error){console.error(res.error);return;}
+  const row=res.data?.[0];
+  if(!row)return;
+  try{
+    const data=JSON.parse(row.text||"{}");
+    state.parameters={
+      sleepHours:data.sleepHours??"",
+      hallucinations:Array.isArray(data.hallucinations)?data.hallucinations:[],
+      note:data.note??""
+    };
+    state.parameterRowId=row.id;
+  }catch(e){console.error("parameter parse error",e);}
+}
+
+function renderDailyParameters(){
+  const p=state.parameters||{};
+  const sleep=document.getElementById("sleepHours");
+  if(sleep)sleep.value=p.sleepHours??"";
+  const checks={
+    hallucinationVisual:"幻視",hallucinationAuditory:"幻聴",hallucinationTactile:"幻触",
+    delusionPersecution:"被害妄想",hallucinationOther:"幻覚（その他）"
+  };
+  Object.entries(checks).forEach(([id,label])=>{
+    const el=document.getElementById(id); if(el)el.checked=(p.hallucinations||[]).includes(label);
+  });
+  const note=document.getElementById("parameterNote"); if(note)note.value=p.note||"";
+}
+
+async function saveDailyParameters(){
+  const sleep=document.getElementById("sleepHours")?.value.trim()||"";
+  const hallucinations=[];
+  const checks={
+    hallucinationVisual:"幻視",hallucinationAuditory:"幻聴",hallucinationTactile:"幻触",
+    delusionPersecution:"被害妄想",hallucinationOther:"幻覚（その他）"
+  };
+  Object.entries(checks).forEach(([id,label])=>{if(document.getElementById(id)?.checked)hallucinations.push(label);});
+  const note=document.getElementById("parameterNote")?.value.trim()||"";
+  if(sleep!=="" && (Number(sleep)<0 || Number(sleep)>24)){alert("睡眠時間は0〜24時間で入力してください。");return;}
+  const data={date:day(),sleepHours:sleep,hallucinations,note};
+  state.parameters={sleepHours:sleep,hallucinations,note};
+  if(!supabaseReady||!user){
+    localStorage.setItem(`dailyParameters:${day()}`,JSON.stringify(data));
+    const st=document.getElementById("parameterStatus"); if(st)st.textContent="この端末に保存しました。ログインするとクラウド同期できます。";
+    return;
+  }
+  let error=null;
+  if(state.parameterRowId){
+    const res=await supabaseClient.from("custom_rules").update({text:JSON.stringify(data),source:""})
+      .eq("id",state.parameterRowId).eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY);
+    error=res.error;
+  }else{
+    const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify(data),category:DAILY_PARAMETER_CATEGORY,source:""}).select("id").single();
+    error=res.error; if(res.data)state.parameterRowId=res.data.id;
+  }
+  if(error){console.error(error);alert(`保存に失敗しました：${error.message}`);return;}
+  localStorage.setItem(`dailyParameters:${day()}`,JSON.stringify(data));
+  const st=document.getElementById("parameterStatus"); if(st)st.textContent="☁️ その他パラメーターを保存しました";
+}
+
 async function loadCloud(){
   if(!supabaseReady||!user)return;
   await removeDeletedCategories();
@@ -252,6 +319,7 @@ async function loadCloud(){
     .filter(x=>x.category===PRIORITY_CATEGORY && x.text!==PRIORITY_SENTINEL_TEXT)
     .map(x=>({id:x.id,text:x.text}));
   state.medications=rows.filter(x=>x.category===MEDICATION_CATEGORY).map(parseMedicationRow);
+  await loadDailyParameters();
   render();
   await loadAchievementHistory();
   await loadUrgeHistory(urgeChartDays);
@@ -710,6 +778,7 @@ function renderAchievementChart(points){
 function render(){
   renderPriority();
   renderUrges();
+  renderDailyParameters();
   renderMedication();
   const wrap=document.getElementById("categories"); wrap.innerHTML="";
   const groups={};
@@ -794,6 +863,7 @@ document.getElementById("addBtn").onclick=async()=>{
   }
 };
 
+document.getElementById("saveParametersBtn").onclick=saveDailyParameters;
 document.getElementById("printBtn").onclick=()=>window.print();
 
 document.getElementById("resetBtn").onclick=async()=>{
