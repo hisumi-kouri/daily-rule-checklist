@@ -20,14 +20,14 @@
   </header>
 
   <nav class="app-tabs" aria-label="アプリ内メニュー">
-    <button type="button" class="app-tab active" data-tab="checksheet">📋 今日のチェックシート</button>
-    <button type="button" class="app-tab" data-tab="record">📊 記録・分析</button>
+    <button type="button" class="app-tab" data-tab="checksheet">📋 今日のチェックシート</button>
+    <button type="button" class="app-tab active" data-tab="record">📊 記録・分析</button>
   </nav>
 
   <main>
     <div id="checksheetTab" class="tab-panel active">
       <section class="card checksheet-head">
-        <div class="section-head"><div><h2>📋 今日のチェックシート</h2><p class="muted">基本・生活・職場・今日の振り返りを確認します。</p></div><span id="checksheetDate" class="muted small"></span></div>
+        <div class="section-head"><div><h2>📋 今日のチェックシート</h2><p class="muted">基本・生活・職場・今日の振り返りに分けて確認します。</p></div><span id="checksheetDate" class="muted small"></span></div>
       </section>
     </div>
     <div id="recordTab" class="tab-panel">
@@ -203,8 +203,9 @@
 
     <section class="card add">
       <h2>➕ ルールを追加</h2>
-      <div class="form">
+      <div class="form add-rule-form">
         <input id="newText" placeholder="例：作業前に○○を確認する">
+        <input id="newSource" placeholder="補足説明（任意）" maxlength="300">
         <select id="newCategory">
           <option value="__custom__">✏️ 自由入力</option>
         </select>

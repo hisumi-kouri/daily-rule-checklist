@@ -497,7 +497,7 @@ async function logout(){
   signOutBtn.classList.add("hidden");
 }
 
-async function addCustom(text,cat,source="追加"){
+async function addCustom(text,cat,source=""){
   if(!supabaseReady||!user){alert("Supabaseに接続できていません。"); return;}
   const {data,error}=await insertRuleRow(user.id,{text,cat,source});
   if(error){alert(`追加に失敗しました：${error.message}`); return;}
@@ -517,7 +517,7 @@ async function editRule(ruleId){
   if(category===null)return;
   const newCategory=category.trim();
   if(!newCategory){alert("カテゴリを空にはできません。"); return;}
-  const source=prompt("担当・出典（不要なら空欄）",rule.source||"");
+  const source=prompt("補足説明（不要なら空欄）",rule.source||"");
   if(source===null)return;
 
   let res=await supabaseClient.from("custom_rules").update({text:newText,category:newCategory,source:source.trim()})
@@ -784,36 +784,49 @@ function render(){
   const wrap=document.getElementById("categories"); wrap.innerHTML="";
   const groups={};
   for(const item of allItems()) (groups[item.cat]??=[]).push(item);
-  const fixedOrder=["基本","生活","職場","今日の振り返り"];
-  const orderedCats=[...fixedOrder,...Object.keys(groups).filter(cat=>!fixedOrder.includes(cat))];
-  const icon=(cat)=>cat==="生活"?"🏠":cat==="職場"?"💼":cat==="基本"?"📌":cat==="今日の振り返り"?"📝":"📂";
-  for(const cat of orderedCats){
-    const items=groups[cat]||[]; 
-    if(!items.length) continue;
-    const sec=document.createElement("section"); sec.className="card category";
-    sec.innerHTML=`<h2>${icon(cat)} ${cat}</h2>`;
-    for(const item of items){
-      const label=document.createElement("div"); label.className="check";
-      const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!state.checks[item.id];
-      const div=document.createElement("div"); div.className="text"; div.textContent=item.text;
-      if(item.source){const src=document.createElement("small"); src.className="source"; src.textContent=`（${item.source}）`; div.appendChild(src);}
-      if(cb.checked) label.classList.add("done");
-      cb.onchange=async()=>{label.classList.toggle("done",cb.checked); await saveCheck(item.id,cb.checked); updateProgress();};
-      label.append(cb,div);
 
-      const actions=document.createElement("div"); actions.className="rule-actions";
-      const edit=document.createElement("button"); edit.type="button"; edit.className="edit-rule"; edit.textContent="変更"; edit.title="このルールを変更";
-      edit.onclick=async(e)=>{e.preventDefault(); e.stopPropagation(); await editRule(item.id.slice(2));};
-      const del=document.createElement("button"); del.type="button"; del.className="delete-rule"; del.textContent="削除"; del.title="このルールを削除";
-      del.onclick=async(e)=>{e.preventDefault(); e.stopPropagation(); await deleteRule(item.id.slice(2));};
-      actions.append(edit,del); label.appendChild(actions);
-      sec.appendChild(label);
-    }
+  const groupDefs=[
+    {name:"基本",icon:"📌",cats:["基本"]},
+    {name:"生活",icon:"🏠",cats:["生活"]},
+    {name:"職場",icon:"💼",cats:["職場"]},
+    {name:"今日の振り返り",icon:"📝",cats:["今日の振り返り"]}
+  ];
+  const used=new Set();
+  const renderRule=(item)=>{
+    const label=document.createElement("div"); label.className="check";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!state.checks[item.id];
+    const div=document.createElement("div"); div.className="text"; div.textContent=item.text;
+    if(item.source){const src=document.createElement("small"); src.className="source"; src.textContent=`補足：${item.source}`; div.appendChild(src);}
+    if(cb.checked) label.classList.add("done");
+    cb.onchange=async()=>{label.classList.toggle("done",cb.checked); await saveCheck(item.id,cb.checked); updateProgress();};
+    label.append(cb,div);
+    const actions=document.createElement("div"); actions.className="rule-actions";
+    const edit=document.createElement("button"); edit.type="button"; edit.className="edit-rule"; edit.textContent="変更";
+    edit.onclick=async(e)=>{e.preventDefault();e.stopPropagation();await editRule(item.id.slice(2));};
+    const del=document.createElement("button"); del.type="button"; del.className="delete-rule"; del.textContent="削除";
+    del.onclick=async(e)=>{e.preventDefault();e.stopPropagation();await deleteRule(item.id.slice(2));};
+    actions.append(edit,del); label.appendChild(actions);
+    return label;
+  };
+  for(const group of groupDefs){
+    const items=[];
+    for(const cat of group.cats){ if(groups[cat]){items.push(...groups[cat]);used.add(cat);} }
+    if(!items.length) continue;
+    const sec=document.createElement("section"); sec.className="card category rule-group";
+    sec.innerHTML=`<div class="group-title"><h2>${group.icon} ${group.name}</h2><span class="group-count">${items.length}項目</span></div>`;
+    items.forEach(item=>sec.appendChild(renderRule(item)));
+    wrap.appendChild(sec);
+  }
+  const otherCats=Object.keys(groups).filter(cat=>!used.has(cat));
+  for(const cat of otherCats){
+    const items=groups[cat]||[]; if(!items.length)continue;
+    const sec=document.createElement("section"); sec.className="card category rule-group other-group";
+    sec.innerHTML=`<div class="group-title"><h2>📂 ${cat}</h2><span class="group-count">${items.length}項目</span></div>`;
+    items.forEach(item=>sec.appendChild(renderRule(item)));
     wrap.appendChild(sec);
   }
   updateProgress();
 }
-
 // タブ切り替え：今日のチェックシートにルール一覧とルール追加を集約
 const checksheetTab=document.getElementById("checksheetTab");
 const recordTab=document.getElementById("recordTab");
@@ -829,6 +842,7 @@ function switchAppTab(name){
   recordTab?.classList.toggle("active",name==="record");
 }
 document.querySelectorAll(".app-tab").forEach(btn=>btn.addEventListener("click",()=>switchAppTab(btn.dataset.tab)));
+switchAppTab("record");
 const checksheetDate=document.getElementById("checksheetDate");
 if(checksheetDate) checksheetDate.textContent=new Intl.DateTimeFormat("ja-JP",{dateStyle:"full"}).format(new Date());
 function refreshCategoryOptions(){
@@ -883,8 +897,10 @@ document.getElementById("addBtn").onclick=async()=>{
     category=categoryCustom.value.trim();
     if(!category){alert("自由なカテゴリー名を入力してください。");categoryCustom.focus();return;}
   }
-  await addCustom(text,category);
+  const source=document.getElementById("newSource")?.value.trim()||"";
+  await addCustom(text,category,source);
   input.value="";
+  const sourceInput=document.getElementById("newSource"); if(sourceInput)sourceInput.value="";
   if(categorySelect.value==="__custom__"){
     let option=[...categorySelect.options].find(o=>o.value===category);
     if(!option){option=document.createElement("option");option.value=category;option.textContent=category;categorySelect.insertBefore(option,categorySelect.querySelector('option[value="__custom__"]'));}
