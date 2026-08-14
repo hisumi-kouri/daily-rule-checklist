@@ -10,6 +10,13 @@ let supabaseReady=false, user=null;
 let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
+const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v1__";
+const DEFAULT_BASIC_RULES=[
+  "睡眠薬を飲んだ",
+  "遅刻しそうな時は午後から出勤する",
+  "犬のふんを掃除した",
+  "高松さんへの週１回の近状メールを送る"
+];
 const PRIORITY_CATEGORY="__priority__";
 const PRIORITY_SENTINEL_TEXT="__priority_initialized_v1__";
 const MEDICATION_CATEGORY="__medication__";
@@ -123,6 +130,28 @@ async function ensureBaseRules(){
 
   const markerInsert=await supabaseClient.from("custom_rules")
     .insert({user_id:uid,text:BASE_SENTINEL_TEXT,category:BASE_SENTINEL_CATEGORY});
+  if(markerInsert.error) throw markerInsert.error;
+}
+
+async function ensureBasicRules(){
+  if(!supabaseReady||!user)return;
+  const uid=user.id;
+  const marker=await supabaseClient.from("custom_rules").select("id").eq("user_id",uid)
+    .eq("category",BASE_SENTINEL_CATEGORY).eq("text",BASIC_RULES_SENTINEL_TEXT).limit(1);
+  if(marker.error) throw marker.error;
+  if(marker.data?.length) return;
+
+  const existing=await supabaseClient.from("custom_rules").select("id,text,category").eq("user_id",uid);
+  if(existing.error) throw existing.error;
+  const rows=existing.data||[];
+  for(const text of DEFAULT_BASIC_RULES){
+    if(rows.some(x=>x.text===text && x.category==="基本")) continue;
+    const res=await insertRuleRow(uid,{text,cat:"基本",source:""});
+    if(res.error) throw res.error;
+    rows.push(res.data);
+  }
+  const markerInsert=await supabaseClient.from("custom_rules")
+    .insert({user_id:uid,text:BASIC_RULES_SENTINEL_TEXT,category:BASE_SENTINEL_CATEGORY});
   if(markerInsert.error) throw markerInsert.error;
 }
 
@@ -298,6 +327,7 @@ async function loadCloud(){
   if(!supabaseReady||!user)return;
   await removeDeletedCategories();
   await ensureBaseRules();
+  await ensureBasicRules();
   await ensurePriorityRules();
   const d=day();
   const {data,error}=await supabaseClient.from("daily_check_states")
