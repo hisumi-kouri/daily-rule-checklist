@@ -11,6 +11,15 @@ let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepH
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
+const LIFE_RULES_SENTINEL_TEXT="__life_rules_initialized_v1__";
+const DEFAULT_LIFE_RULES=[
+  {text:"朝薬を飲んだ",source:""},
+  {text:"昼薬を飲んだ",source:""},
+  {text:"夕薬を飲んだ",source:""},
+  {text:"就寝薬を飲んだ",source:""},
+  {text:"頓服を飲んだ",source:"頓服を飲んだ場合は、必要に応じて補足を入力できます。"}
+];
+const NON_ACHIEVEMENT_RULES=new Set(["頓服を飲んだ"]);
 const DEFAULT_BASIC_RULES=[
   "睡眠薬を飲んだ",
   "遅刻しそうな時は午後から出勤する",
@@ -56,7 +65,7 @@ function baseItems(){
 function allItems(){
   const rules=state.custom
     .filter(x=>x.cat!==MEDICATION_CATEGORY)
-    .map(x=>({...x,id:`c:${x.id}`}));
+    .map(x=>({...x,id:`c:${x.id}`,trackAchievement:!NON_ACHIEVEMENT_RULES.has(x.text)}));
   const meds=(state.medications||[]).map(x=>({
     id:`m:${x.id}`, cat:"服薬管理", text:`${x.name}${x.dose?`（${x.dose}）`:""}${x.timing?`・${x.timing}`:""}`, source:x.note||""
   }));
@@ -78,7 +87,7 @@ async function insertRuleRow(userId,rule){
   return res;
 }
 
-const REMOVED_CATEGORIES=["生活","職場・基本ルール","出品ルール","リタリコブログ","今日の確認"];
+const REMOVED_CATEGORIES=["職場・基本ルール","出品ルール","リタリコブログ","今日の確認"];
 async function removeDeletedCategories(){
   if(!supabaseReady||!user)return;
   const uid=user.id;
@@ -152,6 +161,29 @@ async function ensureBasicRules(){
   }
   const markerInsert=await supabaseClient.from("custom_rules")
     .insert({user_id:uid,text:BASIC_RULES_SENTINEL_TEXT,category:BASE_SENTINEL_CATEGORY});
+  if(markerInsert.error) throw markerInsert.error;
+}
+
+async function ensureLifeRules(){
+  if(!supabaseReady||!user)return;
+  const uid=user.id;
+  const marker=await supabaseClient.from("custom_rules").select("id").eq("user_id",uid)
+    .eq("category",BASE_SENTINEL_CATEGORY).eq("text",LIFE_RULES_SENTINEL_TEXT).limit(1);
+  if(marker.error) throw marker.error;
+  if(marker.data?.length) return;
+  const existing=await supabaseClient.from("custom_rules").select("id,text,category,source").eq("user_id",uid);
+  if(existing.error) throw existing.error;
+  const rows=existing.data||[];
+  for(const rule of DEFAULT_LIFE_RULES){
+    let found=rows.find(x=>x.text===rule.text && x.category==="生活");
+    if(!found){
+      const res=await insertRuleRow(uid,{text:rule.text,cat:"生活",source:rule.source});
+      if(res.error) throw res.error;
+      found=res.data; rows.push(found);
+    }
+  }
+  const markerInsert=await supabaseClient.from("custom_rules")
+    .insert({user_id:uid,text:LIFE_RULES_SENTINEL_TEXT,category:BASE_SENTINEL_CATEGORY});
   if(markerInsert.error) throw markerInsert.error;
 }
 
@@ -328,6 +360,7 @@ async function loadCloud(){
   await removeDeletedCategories();
   await ensureBaseRules();
   await ensureBasicRules();
+  await ensureLifeRules();
   await ensurePriorityRules();
   const d=day();
   const {data,error}=await supabaseClient.from("daily_check_states")
@@ -567,6 +600,16 @@ async function editRule(ruleId){
   setStatus("☁️ ルールを変更しました");
 }
 
+async function updateRuleSource(ruleId,source){
+  const rule=state.custom.find(x=>String(x.id)===String(ruleId));
+  if(!rule||!supabaseReady||!user)return;
+  let res=await supabaseClient.from("custom_rules").update({source:source.trim()}).eq("id",rule.id).eq("user_id",user.id);
+  if(res.error && /source|column/i.test(res.error.message||"")) return;
+  if(res.error){alert(`補足の保存に失敗しました：${res.error.message}`);return;}
+  rule.source=source.trim();
+  setStatus("☁️ 頓服の補足を保存しました");
+}
+
 async function deleteRule(ruleId){
   if(!supabaseReady||!user){alert("Supabaseに接続できていません。"); return;}
   const rule=state.custom.find(x=>String(x.id)===String(ruleId));
@@ -753,7 +796,7 @@ function renderPriority(){
 }
 
 function updateProgress(){
-  const items=allItems(), done=items.filter(x=>state.checks[x.id]).length;
+  const items=allItems().filter(x=>x.trackAchievement!==false), done=items.filter(x=>state.checks[x.id]).length;
   const rate=items.length ? Math.round(done/items.length*100) : 0;
   document.getElementById("progressText").textContent=`${done} / ${items.length}（${rate}%）`;
   document.getElementById("progressBar").style.width=rate+"%";
@@ -774,7 +817,7 @@ async function loadAchievementHistory(){
   const note=document.getElementById("chartNote");
   if(!chart)return;
   const dates=Array.from({length:7},(_,i)=>dateOffset(i-6));
-  const total=allItems().length;
+  const total=allItems().filter(x=>x.trackAchievement!==false).length;
   if(!supabaseReady||!user||!total){
     renderAchievementChart(dates.map(date=>({date,rate:0,done:0})));
     if(note) note.textContent=total?"ログインすると過去7日間の達成率を表示できます。":"ルールや服薬を登録すると達成率を表示できます。";
@@ -783,8 +826,9 @@ async function loadAchievementHistory(){
   const {data,error}=await supabaseClient.from("daily_check_states")
     .select("check_date,item_id,checked").eq("user_id",user.id).gte("check_date",dates[0]).lte("check_date",dates[6]);
   if(error){console.error(error); if(note) note.textContent="グラフデータを読み込めませんでした。"; return;}
+  const eligibleIds=new Set(allItems().filter(x=>x.trackAchievement!==false).map(x=>x.id));
   const byDate={};
-  for(const row of data||[]) if(row.checked){(byDate[row.check_date]??=[]).push(row.item_id);}
+  for(const row of data||[]) if(row.checked && eligibleIds.has(row.item_id)){(byDate[row.check_date]??=[]).push(row.item_id);}
   const points=dates.map(date=>{
     const done=new Set(byDate[date]||[]).size;
     return {date,done,rate:Math.min(100,Math.round(done/total*100))};
@@ -833,7 +877,13 @@ function render(){
     const label=document.createElement("div"); label.className="check";
     const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!state.checks[item.id];
     const div=document.createElement("div"); div.className="text"; div.textContent=item.text;
-    if(item.source){const src=document.createElement("small"); src.className="source"; src.textContent=`補足：${item.source}`; div.appendChild(src);}
+    if(item.source && item.text!=="頓服を飲んだ"){const src=document.createElement("small"); src.className="source"; src.textContent=`補足：${item.source}`; div.appendChild(src);}
+    if(item.text==="頓服を飲んだ"){
+      const note=document.createElement("input"); note.type="text"; note.className="rule-inline-note"; note.placeholder="補足（任意）"; note.maxLength=300; note.value=item.source||"";
+      note.onclick=e=>e.stopPropagation();
+      note.onchange=async()=>{ await updateRuleSource(item.id.slice(2),note.value); };
+      div.appendChild(note);
+    }
     if(cb.checked) label.classList.add("done");
     cb.onchange=async()=>{label.classList.toggle("done",cb.checked); await saveCheck(item.id,cb.checked); updateProgress();};
     label.append(cb,div);
