@@ -143,7 +143,9 @@
         <button type="button" class="urge-tab" data-days="30">30日間</button>
       </div>
       <div id="urgeChart" class="urge-chart" aria-label="消えたい衝動と死にたい衝動の推移グラフ"></div>
-      <div class="urge-legend"><span>● 消えたい衝動</span><span>● 死にたい衝動</span></div>
+      <div class="urge-legend">
+<span>● 消えたい衝動</span><span>● 死にたい衝動</span><span>● 気分</span><span>● 不安</span><span>● イライラ</span><span>● 疲労感</span>
+</div>
       <p id="urgeChartNote" class="muted small">データを読み込んでいます…</p>
     </section>
 
@@ -163,11 +165,6 @@
       <div class="form">
         <input id="newText" placeholder="例：作業前に○○を確認する">
         <select id="newCategory">
-          <option>生活</option>
-          <option>職場・基本ルール</option>
-          <option>出品ルール</option>
-          <option>リタリコブログ</option>
-          <option>今日の確認</option>
           <option value="__custom__">✏️ 自由入力</option>
         </select>
         <input id="newCategoryCustom" class="category-custom" placeholder="自由なカテゴリー名を入力" style="display:none" maxlength="50">
@@ -176,7 +173,7 @@
     </section>
   </main>
 
-  <footer>Supabase同期版 v0.9</footer>
+  <footer>Supabase同期版 v0.15</footer>
   <script type="module" src="app.js"></script>
 </body>
 </html>

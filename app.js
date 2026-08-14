@@ -4,44 +4,7 @@ const SUPABASE_URL = "https://nhyikuzvigfzrcgetxej.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const base=[
-["生活",[
-["睡眠薬を毎日飲む","須摩さん"],
-["遅刻した時は午後から出勤してもよい（毎日遅刻にならないよう注意）","須摩さん"],
-["人が通る道などの犬のふんは掃除する","須摩さん"],
-["高松さんへ週1回メールを送る","須摩さん"]
-]],
-["職場・基本ルール",[
-["指示を受けたら、覚えているうちにチャッピーへ送る","須摩さん"],
-["利用者へ直接指示しない","須摩さん"],
-["利用者へ伝えたいことは必ず職員を通す","須摩さん"],
-["再撮影の報告はメモをして、まとめて職員へ伝える","須摩さん"],
-["緊急性のない質問はチャットワークで","石川さん"],
-["急ぎではない連絡は、その場ですぐ対応しなくてもよい","石川さん"],
-["個人面談中はチャットワークを送らない","石川さん"],
-["勝手に判断せず、迷ったら職員へ確認する","石川さん"],
-["ミスのフィードバックはすぐにする","石川さん"],
-["外界の音が気になる時はイヤフォンを使ってよい","石川さん"]
-]],
-["出品ルール",[
-["miniプリンターの管理番号はM00233（旧M00227）","石川さん"],
-["同じ商品は「状態A」「状態B」などで区別する","安井さん・須摩さん"],
-["分からないものは飛ばして、出品できるものから進める","石川さん"],
-["質問するときは具体的な数を言ってから、どのくらいかを聞く","石川さん"],
-["3回再出品してから値下げする","石川さん"]
-]],
-["リタリコブログ",[
-["まず自分で文章を打つ","石川さん"],
-["文章をチャッピーに整えてもらう","石川さん"],
-["整えた文章を職員に見せる","石川さん"],
-["改行・画像挿入を行う","石川さん"]
-]],
-["今日の確認",[
-["体調 → 生活 → 仕事の順番を守った","きくながさん"],
-["困った時に勝手に判断しなかった",""],
-["今日も一日お疲れさまでした",""]
-]]
-];
+const base=[];
 
 let supabaseReady=false, user=null;
 let state={checks:{}, custom:[], priority:[], medications:[]};
@@ -53,7 +16,11 @@ const MEDICATION_CATEGORY="__medication__";
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
 const URGE_TYPES=[
   {id:"vanish",label:"消えたい衝動"},
-  {id:"die",label:"死にたい衝動"}
+  {id:"die",label:"死にたい衝動"},
+  {id:"mood",label:"気分"},
+  {id:"anxiety",label:"不安"},
+  {id:"irritability",label:"イライラ"},
+  {id:"fatigue",label:"疲労感"}
 ];
 const day=()=>{
   const d=new Date();
@@ -101,6 +68,21 @@ async function insertRuleRow(userId,rule){
       .insert({user_id:userId,text:rule.text,category:rule.cat}).select().single();
   }
   return res;
+}
+
+const REMOVED_CATEGORIES=["生活","職場・基本ルール","出品ルール","リタリコブログ","今日の確認"];
+async function removeDeletedCategories(){
+  if(!supabaseReady||!user)return;
+  const uid=user.id;
+  const res=await supabaseClient.from("custom_rules").select("id,category").eq("user_id",uid).in("category",REMOVED_CATEGORIES);
+  if(res.error) throw res.error;
+  const ids=(res.data||[]).map(x=>`c:${x.id}`);
+  if(ids.length){
+    const delChecks=await supabaseClient.from("daily_check_states").delete().eq("user_id",uid).in("item_id",ids);
+    if(delChecks.error) throw delChecks.error;
+  }
+  const delRules=await supabaseClient.from("custom_rules").delete().eq("user_id",uid).in("category",REMOVED_CATEGORIES);
+  if(delRules.error) throw delRules.error;
 }
 
 async function ensureBaseRules(){
@@ -247,6 +229,7 @@ function renderMedication(){
 
 async function loadCloud(){
   if(!supabaseReady||!user)return;
+  await removeDeletedCategories();
   await ensureBaseRules();
   await ensurePriorityRules();
   const d=day();
@@ -573,11 +556,14 @@ function renderUrgeChart(points){
     const point=points[i];
     const col=document.createElement("div"); col.className="urge-chart-col";
     const values=document.createElement("div"); values.className="urge-bars";
-    const v1=point.vanish===null?0:point.vanish;
-    const v2=point.die===null?0:point.die;
-    const b1=document.createElement("div"); b1.className="urge-bar vanish-bar"; b1.style.height=`${Math.max(v1*10,2)}%`; b1.title=`消えたい衝動 ${point.vanish===null?"未記録":point.vanish+" / 10"}`;
-    const b2=document.createElement("div"); b2.className="urge-bar die-bar"; b2.style.height=`${Math.max(v2*10,2)}%`; b2.title=`死にたい衝動 ${point.die===null?"未記録":point.die+" / 10"}`;
-    values.append(b1,b2);
+    URGE_TYPES.forEach(type=>{
+      const value=point[type.id]===null?0:Number(point[type.id]||0);
+      const bar=document.createElement("div");
+      bar.className=`urge-bar urge-${type.id}`;
+      bar.style.height=`${Math.max(value*10,2)}%`;
+      bar.title=`${type.label} ${point[type.id]===null?"未記録":value+" / 10"}`;
+      values.appendChild(bar);
+    });
     const label=document.createElement("span"); label.className="urge-chart-label"; label.textContent=(i%showEvery===0||i===points.length-1)?shortDate(point.date):"";
     col.append(values,label); chart.appendChild(col);
   }
@@ -587,8 +573,9 @@ async function loadUrgeHistory(days=urgeChartDays){
   const chart=document.getElementById("urgeChart"), note=document.getElementById("urgeChartNote");
   if(!chart)return;
   const dates=Array.from({length:days},(_,i)=>dateOffset(i-days+1));
+  const empty=()=>{const x={date:null}; URGE_TYPES.forEach(t=>x[t.id]=null); return x;};
   if(!supabaseReady||!user){
-    renderUrgeChart(dates.map(date=>({date,vanish:null,die:null})));
+    renderUrgeChart(dates.map(date=>({...empty(),date})));
     if(note)note.textContent="ログインすると過去の心の状態の推移を表示できます。";
     return;
   }
@@ -598,13 +585,17 @@ async function loadUrgeHistory(days=urgeChartDays){
   const values={};
   for(const row of data||[]){
     if(!row.checked)continue;
-    const m=String(row.item_id).match(/^urge:(vanish|die):(\\d+)$/);
+    const m=String(row.item_id).match(/^urge:(vanish|die|mood|anxiety|irritability|fatigue):(\d+)$/);
     if(!m)continue;
     values[`${row.check_date}:${m[1]}`]=Number(m[2]);
   }
-  const points=dates.map(date=>({date,vanish:values[`${date}:vanish`]??null,die:values[`${date}:die`]??null}));
+  const points=dates.map(date=>{
+    const point={date};
+    URGE_TYPES.forEach(type=>point[type.id]=values[`${date}:${type.id}`]??null);
+    return point;
+  });
   renderUrgeChart(points);
-  if(note)note.textContent=`過去${days}日間の記録です。数値が高いほど衝動が強かったことを示します。`;
+  if(note)note.textContent=`過去${days}日間の記録です。各項目を0〜10で表示しています。`;
 }
 function initUrgeChartTabs(){
   document.querySelectorAll(".urge-tab").forEach(btn=>btn.addEventListener("click",async()=>{
@@ -723,7 +714,7 @@ function render(){
   const wrap=document.getElementById("categories"); wrap.innerHTML="";
   const groups={};
   for(const item of allItems()) (groups[item.cat]??=[]).push(item);
-  const icon=(cat)=>cat==="生活"?"🏠":cat==="職場・基本ルール"?"💼":cat==="出品ルール"?"📦":cat==="リタリコブログ"?"📝":cat==="今日の確認"?"⭐":"📌";
+  const icon=(cat)=>cat==="生活"?"🏠":cat==="職場・基本ルール"?"💼":cat==="出品ルール"?"📦":cat==="リタリコブログ"?"📝":"📌";
   for(const [cat,items] of Object.entries(groups)){
     const sec=document.createElement("section"); sec.className="card category";
     sec.innerHTML=`<h2>${icon(cat)} ${cat}</h2>`;
