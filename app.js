@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.44";
+const APP_VERSION = "v0.45";
 const SUPABASE_URL = "https://nhyikuzvigfzrcgetxej.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
 let supabaseClient = null;
@@ -93,7 +93,7 @@ function baseItems(){
 
 function allItems(){
   const rules=state.custom
-    .filter(x=>x.cat!==MEDICATION_CATEGORY)
+    .filter(x=>x.cat!==MEDICATION_CATEGORY && x.cat!==DAILY_PARAMETER_CATEGORY && x.cat!==DAILY_MENTAL_CATEGORY)
     .map(x=>({...x,id:`c:${x.id}`,trackAchievement:!NON_ACHIEVEMENT_RULES.has(x.text)}));
   const meds=(state.medications||[]).map(x=>({
     id:`m:${x.id}`, cat:"服薬管理", text:`${x.name}${x.dose?`（${x.dose}）`:""}${x.timing?`・${x.timing}`:""}`, source:x.note||""
@@ -815,7 +815,7 @@ async function loadCloud(){
   if(cr.error){console.error(cr.error); return;}
   const rows=cr.data||[];
   state.custom=rows
-    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY)
+    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY && x.category!==DAILY_PARAMETER_CATEGORY && x.category!==DAILY_MENTAL_CATEGORY)
     .map(x=>({id:x.id,text:x.text,cat:x.category,source:x.source||""}));
   state.priority=rows
     .filter(x=>x.category===PRIORITY_CATEGORY && x.text!==PRIORITY_SENTINEL_TEXT)
@@ -1508,7 +1508,7 @@ function refreshCategoryOptions(){
   const select=document.getElementById("newCategory"); if(!select)return;
   const current=select.value;
   const names=["基本","生活","職場","今日の振り返り","通院",...(state.custom||[]).map(x=>x.cat)];
-  const unique=[...new Set(names)].filter(x=>x && !["__custom__","__system__","__priority__","__medication__","__daily_parameters__"].includes(x));
+  const unique=[...new Set(names)].filter(x=>x && !["__custom__","__system__","__priority__","__medication__","__daily_parameters__","__daily_mental__"].includes(x));
   select.innerHTML=unique.map(x=>`<option value="${x.replaceAll('"','&quot;')}">${x}</option>`).join("")+`<option value="__custom__">✏️ 自由入力</option>`;
   if([...select.options].some(o=>o.value===current)) select.value=current;
 }
