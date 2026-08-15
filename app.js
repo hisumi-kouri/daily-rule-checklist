@@ -32,6 +32,7 @@ const PRIORITY_CATEGORY="__priority__";
 const PRIORITY_SENTINEL_TEXT="__priority_initialized_v1__";
 const MEDICATION_CATEGORY="__medication__";
 const DAILY_PARAMETER_CATEGORY="__daily_parameters__";
+const DAILY_MENTAL_CATEGORY="__daily_mental__";
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
 const URGE_TYPES=[
   {id:"vanish",label:"消えたい衝動"},
@@ -854,30 +855,39 @@ async function loadUrgeHistory(days=urgeChartDays){
   if(!chart)return;
   const dates=Array.from({length:days},(_,i)=>dateOffset(i-days+1));
   const empty=()=>{const x={date:null}; URGE_TYPES.forEach(t=>x[t.id]=null); return x;};
+
+  const localMap={};
+  for(const date of dates){
+    const raw=localStorage.getItem(`mentalState:${date}`);
+    if(raw){try{localMap[date]=JSON.parse(raw)||{};}catch{}}
+  }
+
   if(!supabaseReady||!user){
-    renderUrgeChart(dates.map(date=>({...empty(),date})));
+    const points=dates.map(date=>({...empty(),date,...(localMap[date]||{})}));
+    renderUrgeChart(points);
     await loadParameterTrendHistory(days);
-    if(note)note.textContent="ログインすると過去の心の状態の推移を表示できます。";
+    if(note)note.textContent="保存した心の状態を表示しています。ログインするとPC・スマホ間で同期できます。";
     return;
   }
-  const {data,error}=await supabaseClient.from("daily_check_states").select("check_date,item_id,checked")
-    .eq("user_id",user.id).gte("check_date",dates[0]).lte("check_date",dates[dates.length-1]);
-  if(error){console.error(error);if(note)note.textContent="心の状態グラフを読み込めませんでした。";return;}
-  const values={};
-  for(const row of data||[]){
-    if(!row.checked)continue;
-    const m=String(row.item_id).match(/^urge:(vanish|die|mood|anxiety|irritability|fatigue):(\d+)$/);
-    if(!m)continue;
-    values[`${row.check_date}:${m[1]}`]=Number(m[2]);
+
+  let mentalRes=await supabaseClient.from("custom_rules").select("id,text,category")
+    .eq("user_id",user.id).eq("category",DAILY_MENTAL_CATEGORY).order("created_at");
+  if(mentalRes.error){
+    console.error(mentalRes.error);
+    if(note)note.textContent="心の状態グラフを読み込めませんでした。";
+    return;
   }
-  const points=dates.map(date=>{
-    const point={date};
-    URGE_TYPES.forEach(type=>point[type.id]=values[`${date}:${type.id}`]??null);
-    return point;
-  });
+  const byDate={...localMap};
+  for(const row of mentalRes.data||[]){
+    try{
+      const data=JSON.parse(row.text||"{}");
+      if(data.date && dates.includes(data.date)) byDate[data.date]=data;
+    }catch{}
+  }
+  const points=dates.map(date=>({...empty(),date,...(byDate[date]||{})}));
   renderUrgeChart(points);
   await loadParameterTrendHistory(days);
-  if(note)note.textContent=`過去${days}日間の記録です。心の状態は0〜10、その他パラメーターは別スケールで表示しています。`;
+  if(note)note.textContent=`過去${days}日間の保存済み心の状態です。心の状態は0〜10、その他パラメーターは別スケールで表示しています。`;
 }
 function initUrgeChartTabs(){
   document.querySelectorAll(".urge-tab").forEach(btn=>btn.addEventListener("click",async()=>{
@@ -889,14 +899,39 @@ function initUrgeChartTabs(){
 
 async function saveUrges(){
   const status=document.getElementById("urgeSaveStatus");
-  const values={};
+  const values={date:day()};
+  let hasValue=false;
   for(const type of URGE_TYPES){
     const el=document.getElementById(`urge-${type.id}`);
-    values[type.id]=el && el.value!=="" ? Number(el.value) : null;
+    const value=el && el.value!=="" ? Number(el.value) : null;
+    values[type.id]=value;
+    if(value!==null)hasValue=true;
   }
-  const targets=Object.entries(values).filter(([,v])=>v!==null);
-  if(!targets.length){ if(status)status.textContent="保存する項目を1つ以上選択してください。"; return; }
-  for(const [typeId,value] of targets){ await saveUrgeLevel(typeId,value); }
+  if(!hasValue){ if(status)status.textContent="保存する項目を1つ以上選択してください。"; return; }
+
+  // ローカルにも保存（未ログインでも推移グラフに反映）
+  localStorage.setItem(`mentalState:${day()}`,JSON.stringify(values));
+  for(const [typeId,value] of Object.entries(values)){
+    if(typeId==="date"||value===null)continue;
+    // 当日の状態表示と既存チェック状態も維持
+    await saveUrgeLevel(typeId,value);
+  }
+
+  if(supabaseReady&&user){
+    // 心の状態そのものを日付単位の記録として保存。daily_check_statesに依存しない。
+    const find=await supabaseClient.from("custom_rules").select("id").eq("user_id",user.id)
+      .eq("category",DAILY_MENTAL_CATEGORY);
+    if(find.error){console.error(find.error); if(status)status.textContent=`⚠️ 心の状態の保存に失敗：${find.error.message}`; return;}
+    let rowId=null;
+    for(const row of find.data||[]){
+      try{if(JSON.parse(row.text||"{}").date===day()){rowId=row.id;break;}}catch{}
+    }
+    const payload=JSON.stringify(values);
+    const res=rowId
+      ? await supabaseClient.from("custom_rules").update({text:payload}).eq("id",rowId).eq("user_id",user.id).eq("category",DAILY_MENTAL_CATEGORY)
+      : await supabaseClient.from("custom_rules").insert({user_id:user.id,text:payload,category:DAILY_MENTAL_CATEGORY});
+    if(res.error){console.error(res.error); if(status)status.textContent=`⚠️ 心の状態の保存に失敗：${res.error.message}`; return;}
+  }
   if(status)status.textContent="☁️ 心の状態を保存しました";
   await loadUrgeHistory(urgeChartDays);
 }
