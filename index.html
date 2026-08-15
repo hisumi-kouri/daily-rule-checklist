@@ -153,10 +153,15 @@
         <button type="button" class="urge-tab active" data-days="7">7日間</button>
         <button type="button" class="urge-tab" data-days="30">30日間</button>
       </div>
-      <div id="urgeChart" class="urge-chart" aria-label="消えたい衝動と死にたい衝動の推移グラフ"></div>
+      <div id="urgeChart" class="urge-chart" aria-label="心の状態の推移グラフ"></div>
       <div class="urge-legend">
 <span>● 消えたい衝動</span><span>● 死にたい衝動</span><span>● 気分</span><span>● 不安</span><span>● イライラ</span><span>● 疲労感</span>
 </div>
+      <div class="parameter-trend-block">
+        <div class="parameter-trend-title">📝 その他パラメーターの推移</div>
+        <div id="parameterTrendChart" class="parameter-trend-chart" aria-label="睡眠時間と症状数の推移"></div>
+        <div class="parameter-trend-legend"><span>● 睡眠時間</span><span>● 症状・体験の数</span></div>
+      </div>
       <p id="urgeChartNote" class="muted small">データを読み込んでいます…</p>
     </section>
 
@@ -167,6 +172,8 @@
       </div>
       <div id="urgeLevels"></div>
       <p class="muted small">この記録は通常のルール達成率には含めません。</p>
+      <button type="button" id="saveUrgesBtn" class="parameter-save urge-save">💾 心の状態を保存</button>
+      <p id="urgeSaveStatus" class="muted small"></p>
     </section>
 
     <section class="card parameter-card">

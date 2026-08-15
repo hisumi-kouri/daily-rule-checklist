@@ -184,3 +184,8 @@ footer{color:#9b8f85}
   body{background:#fff!important}
   .card{box-shadow:none}
 }
+
+.urge-save{margin-top:14px;background:linear-gradient(135deg,#b96f52,#d49a78)}
+.parameter-trend-block{margin-top:18px;padding-top:14px;border-top:1px solid #eadfd4}.parameter-trend-title{font-weight:700;margin-bottom:10px}.parameter-trend-chart{height:170px;display:flex;align-items:flex-end;gap:4px;overflow-x:auto;padding:8px 4px 2px;border-top:1px solid #eee6dc}.parameter-trend-col{height:100%;min-width:20px;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}.parameter-trend-bars{height:130px;width:100%;max-width:28px;display:flex;align-items:flex-end;gap:2px;border-bottom:1px solid #d8cbbf;background:repeating-linear-gradient(to top,transparent 0,transparent 15px,#f2ebe5 16px)}.parameter-bar{flex:1;min-height:2px;border-radius:4px 4px 0 0}.sleep-bar{background:linear-gradient(180deg,#8aa6a0,#5f7f78)}.symptom-bar{background:linear-gradient(180deg,#d59a78,#bd7355)}.parameter-trend-label{font-size:9px;color:#7b6d62;height:15px;margin-top:3px;white-space:nowrap}.parameter-trend-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#7b6d62;margin-top:7px}.parameter-trend-legend span:first-child{color:#5f7f78}.parameter-trend-legend span:last-child{color:#bd7355}
+@media(max-width:650px){.parameter-trend-chart{height:150px}.parameter-trend-bars{height:112px;max-width:20px}.parameter-trend-col{min-width:16px}}
+@media print{.urge-save{display:none}.parameter-trend-chart{overflow:visible}.parameter-bar{print-color-adjust:exact;-webkit-print-color-adjust:exact}}

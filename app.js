@@ -371,21 +371,25 @@ function renderMedication(){
 async function loadDailyParameters(){
   state.parameters={sleepHours:"",hallucinations:[],note:""};
   state.parameterRowId=null;
-  if(!supabaseReady||!user)return;
-  let res=await supabaseClient.from("custom_rules").select("id,text,category")
-    .eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY).order("created_at",{ascending:false}).limit(1);
-  if(res.error){console.error(res.error);return;}
-  const row=res.data?.[0];
-  if(!row)return;
-  try{
-    const data=JSON.parse(row.text||"{}");
-    state.parameters={
-      sleepHours:data.sleepHours??"",
-      hallucinations:Array.isArray(data.hallucinations)?data.hallucinations:[],
-      note:data.note??""
-    };
-    state.parameterRowId=row.id;
-  }catch(e){console.error("parameter parse error",e);}
+  const local=localStorage.getItem(`dailyParameters:${day()}`);
+  if(local){
+    try{ state.parameters=JSON.parse(local)||state.parameters; }catch{}
+  }
+  if(!supabaseReady||!user){ renderDailyParameters(); return; }
+  const res=await supabaseClient.from("custom_rules").select("id,text,category")
+    .eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY).order("created_at",{ascending:false});
+  if(res.error){console.error(res.error);renderDailyParameters();return;}
+  for(const row of res.data||[]){
+    try{
+      const data=JSON.parse(row.text||"{}");
+      if(data.date===day()){
+        state.parameters={sleepHours:data.sleepHours??"",hallucinations:Array.isArray(data.hallucinations)?data.hallucinations:[],note:data.note??""};
+        state.parameterRowId=row.id;
+        break;
+      }
+    }catch{}
+  }
+  renderDailyParameters();
 }
 
 function renderDailyParameters(){
@@ -414,23 +418,33 @@ async function saveDailyParameters(){
   if(sleep!=="" && (Number(sleep)<0 || Number(sleep)>24)){alert("睡眠時間は0〜24時間で入力してください。");return;}
   const data={date:day(),sleepHours:sleep,hallucinations,note};
   state.parameters={sleepHours:sleep,hallucinations,note};
+  localStorage.setItem(`dailyParameters:${day()}`,JSON.stringify(data));
   if(!supabaseReady||!user){
-    localStorage.setItem(`dailyParameters:${day()}`,JSON.stringify(data));
     const st=document.getElementById("parameterStatus"); if(st)st.textContent="この端末に保存しました。ログインするとクラウド同期できます。";
+    await loadParameterTrendHistory();
     return;
   }
+  let rowId=state.parameterRowId;
+  if(!rowId){
+    const find=await supabaseClient.from("custom_rules").select("id,text").eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY).order("created_at",{ascending:false});
+    if(!find.error){
+      for(const row of find.data||[]){
+        try{ if(JSON.parse(row.text||"{}").date===day()){ rowId=row.id; break; } }catch{}
+      }
+    }
+  }
   let error=null;
-  if(state.parameterRowId){
-    const res=await supabaseClient.from("custom_rules").update({text:JSON.stringify(data),source:""})
-      .eq("id",state.parameterRowId).eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY);
+  if(rowId){
+    const res=await supabaseClient.from("custom_rules").update({text:JSON.stringify(data)})
+      .eq("id",rowId).eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY);
     error=res.error;
   }else{
-    const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify(data),category:DAILY_PARAMETER_CATEGORY,source:""}).select("id").single();
+    const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify(data),category:DAILY_PARAMETER_CATEGORY}).select("id").single();
     error=res.error; if(res.data)state.parameterRowId=res.data.id;
   }
   if(error){console.error(error);alert(`保存に失敗しました：${error.message}`);return;}
-  localStorage.setItem(`dailyParameters:${day()}`,JSON.stringify(data));
   const st=document.getElementById("parameterStatus"); if(st)st.textContent="☁️ その他パラメーターを保存しました";
+  await loadParameterTrendHistory();
 }
 
 async function loadCloud(){
@@ -790,6 +804,50 @@ function renderUrgeChart(points){
     col.append(values,label); chart.appendChild(col);
   }
 }
+function renderParameterTrend(points){
+  const chart=document.getElementById("parameterTrendChart");
+  if(!chart)return;
+  chart.innerHTML="";
+  const maxSleep=24;
+  const maxSymptoms=5;
+  const showEvery=points.length>10?5:1;
+  for(let i=0;i<points.length;i++){
+    const p=points[i];
+    const col=document.createElement("div"); col.className="parameter-trend-col";
+    const bars=document.createElement("div"); bars.className="parameter-trend-bars";
+    const sleep=document.createElement("div"); sleep.className="parameter-bar sleep-bar"; sleep.style.height=`${Math.max((Number(p.sleep)||0)/maxSleep*100,2)}%`; sleep.title=`睡眠 ${p.sleep==null?"未記録":p.sleep+"時間"}`;
+    const symptoms=document.createElement("div"); symptoms.className="parameter-bar symptom-bar"; symptoms.style.height=`${Math.max((Number(p.symptoms)||0)/maxSymptoms*100,2)}%`; symptoms.title=`症状 ${p.symptoms??0}項目`;
+    bars.append(sleep,symptoms);
+    const label=document.createElement("span"); label.className="parameter-trend-label"; label.textContent=(i%showEvery===0||i===points.length-1)?shortDate(p.date):"";
+    col.append(bars,label); chart.appendChild(col);
+  }
+}
+async function loadParameterTrendHistory(days=urgeChartDays){
+  const chart=document.getElementById("parameterTrendChart"); if(!chart)return;
+  const dates=Array.from({length:days},(_,i)=>dateOffset(i-days+1));
+  const empty=dates.map(date=>({date,sleep:null,symptoms:0}));
+  if(!supabaseReady||!user){
+    const today=state.parameters||{};
+    const point=empty[empty.length-1];
+    if(today.sleepHours!=="")point.sleep=Number(today.sleepHours);
+    point.symptoms=(today.hallucinations||[]).length;
+    renderParameterTrend(empty); return;
+  }
+  const {data,error}=await supabaseClient.from("custom_rules").select("id,text,category")
+    .eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY).order("created_at");
+  if(error){console.error(error);return;}
+  const byDate={};
+  for(const row of data||[]){
+    try{
+      const d=JSON.parse(row.text||"{}");
+      if(!dates.includes(d.date))continue;
+      byDate[d.date]={date:d.date,sleep:d.sleepHours===""||d.sleepHours==null?null:Number(d.sleepHours),symptoms:Array.isArray(d.hallucinations)?d.hallucinations.length:0};
+    }catch{}
+  }
+  const points=dates.map(date=>byDate[date]||{date,sleep:null,symptoms:0});
+  renderParameterTrend(points);
+}
+
 async function loadUrgeHistory(days=urgeChartDays){
   urgeChartDays=days;
   const chart=document.getElementById("urgeChart"), note=document.getElementById("urgeChartNote");
@@ -798,6 +856,7 @@ async function loadUrgeHistory(days=urgeChartDays){
   const empty=()=>{const x={date:null}; URGE_TYPES.forEach(t=>x[t.id]=null); return x;};
   if(!supabaseReady||!user){
     renderUrgeChart(dates.map(date=>({...empty(),date})));
+    await loadParameterTrendHistory(days);
     if(note)note.textContent="ログインすると過去の心の状態の推移を表示できます。";
     return;
   }
@@ -817,7 +876,8 @@ async function loadUrgeHistory(days=urgeChartDays){
     return point;
   });
   renderUrgeChart(points);
-  if(note)note.textContent=`過去${days}日間の記録です。各項目を0〜10で表示しています。`;
+  await loadParameterTrendHistory(days);
+  if(note)note.textContent=`過去${days}日間の記録です。心の状態は0〜10、その他パラメーターは別スケールで表示しています。`;
 }
 function initUrgeChartTabs(){
   document.querySelectorAll(".urge-tab").forEach(btn=>btn.addEventListener("click",async()=>{
@@ -825,6 +885,20 @@ function initUrgeChartTabs(){
     btn.classList.add("active");
     await loadUrgeHistory(Number(btn.dataset.days));
   }));
+}
+
+async function saveUrges(){
+  const status=document.getElementById("urgeSaveStatus");
+  const values={};
+  for(const type of URGE_TYPES){
+    const el=document.getElementById(`urge-${type.id}`);
+    values[type.id]=el && el.value!=="" ? Number(el.value) : null;
+  }
+  const targets=Object.entries(values).filter(([,v])=>v!==null);
+  if(!targets.length){ if(status)status.textContent="保存する項目を1つ以上選択してください。"; return; }
+  for(const [typeId,value] of targets){ await saveUrgeLevel(typeId,value); }
+  if(status)status.textContent="☁️ 心の状態を保存しました";
+  await loadUrgeHistory(urgeChartDays);
 }
 
 function renderUrges(){
@@ -841,7 +915,7 @@ function renderUrges(){
     }
     const current=getUrgeLevel(type.id);
     if(current!==null) select.value=String(current);
-    select.onchange=async()=>{ if(select.value!=="") await saveUrgeLevel(type.id,Number(select.value)); };
+    select.onchange=()=>{};
     row.append(label,select); wrap.appendChild(row);
   }
 }
@@ -1073,6 +1147,7 @@ document.getElementById("addBtn").onclick=async()=>{
 };
 
 document.getElementById("saveParametersBtn").onclick=saveDailyParameters;
+document.getElementById("saveUrgesBtn").onclick=saveUrges;
 document.getElementById("printBtn").onclick=()=>window.print();
 
 document.getElementById("resetBtn").onclick=async()=>{
