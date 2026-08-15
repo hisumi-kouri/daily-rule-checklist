@@ -773,14 +773,10 @@ function getUrgeLevel(type){
   return null;
 }
 
-async function saveUrgeLevel(type,level){
+function setUrgeDraft(type, level){
   const previous=getUrgeLevel(type);
-  if(previous!==null){
-    await saveCheck(`urge:${type}:${previous}`,false);
-  }
-  await saveCheck(`urge:${type}:${level}`,true);
-  renderUrges();
-  await loadUrgeHistory(urgeChartDays);
+  if(previous!==null) delete state.checks[`urge:${type}:${previous}`];
+  state.checks[`urge:${type}:${level}`]=true;
 }
 
 let urgeChartDays=7;
@@ -790,21 +786,24 @@ function renderUrgeChart(points){
   chart.innerHTML="";
   const showEvery=points.length>10?5:1;
   for(let i=0;i<points.length;i++){
-    const point=points[i];
+    const point=points[i]||{};
     const col=document.createElement("div"); col.className="urge-chart-col";
-    const values=document.createElement("div"); values.className="urge-bars";
+    const bars=document.createElement("div"); bars.className="urge-bars";
     URGE_TYPES.forEach(type=>{
-      const value=point[type.id]===null?0:Number(point[type.id]||0);
+      const raw=point[type.id];
+      const n=(raw===null||raw===undefined||raw==="")?null:Number(raw);
       const bar=document.createElement("div");
-      bar.className=`urge-bar urge-${type.id}`;
-      bar.style.height=`${Math.max(value*10,2)}%`;
-      bar.title=`${type.label} ${point[type.id]===null?"未記録":value+" / 10"}`;
-      values.appendChild(bar);
+      bar.className=`urge-bar ${type.id}-bar`;
+      bar.style.height=n!==null && Number.isFinite(n)?`${Math.max(0,Math.min(10,n))*10}%`:'2%';
+      bar.title=`${type.label}: ${n===null?'未記録':n+' / 10'}`;
+      if(n===null) bar.classList.add("unrecorded");
+      bars.appendChild(bar);
     });
     const label=document.createElement("span"); label.className="urge-chart-label"; label.textContent=(i%showEvery===0||i===points.length-1)?shortDate(point.date):"";
-    col.append(values,label); chart.appendChild(col);
+    col.append(bars,label); chart.appendChild(col);
   }
 }
+
 function renderParameterTrend(points){
   const chart=document.getElementById("parameterTrendChart");
   if(!chart)return;
@@ -856,39 +855,43 @@ async function loadUrgeHistory(days=urgeChartDays){
   const dates=Array.from({length:days},(_,i)=>dateOffset(i-days+1));
   const empty=()=>{const x={date:null}; URGE_TYPES.forEach(t=>x[t.id]=null); return x;};
 
-  const localMap={};
+  const byDate={};
   for(const date of dates){
     const raw=localStorage.getItem(`mentalState:${date}`);
-    if(raw){try{localMap[date]=JSON.parse(raw)||{};}catch{}}
+    if(raw){try{byDate[date]={...(byDate[date]||{}),...JSON.parse(raw)}}catch{}}
   }
 
-  if(!supabaseReady||!user){
-    const points=dates.map(date=>({...empty(),date,...(localMap[date]||{})}));
-    renderUrgeChart(points);
-    await loadParameterTrendHistory(days);
-    if(note)note.textContent="保存した心の状態を表示しています。ログインするとPC・スマホ間で同期できます。";
-    return;
-  }
+  const draftRaw=localStorage.getItem("mentalState:draft");
+  if(draftRaw){try{const draft=JSON.parse(draftRaw); if(draft.date && dates.includes(draft.date)) byDate[draft.date]={...(byDate[draft.date]||{}),...draft};}catch{}}
 
-  let mentalRes=await supabaseClient.from("custom_rules").select("id,text,category")
-    .eq("user_id",user.id).eq("category",DAILY_MENTAL_CATEGORY).order("created_at");
-  if(mentalRes.error){
-    console.error(mentalRes.error);
-    if(note)note.textContent="心の状態グラフを読み込めませんでした。";
-    return;
-  }
-  const byDate={...localMap};
-  for(const row of mentalRes.data||[]){
+  if(supabaseReady&&user){
     try{
-      const data=JSON.parse(row.text||"{}");
-      if(data.date && dates.includes(data.date)) byDate[data.date]=data;
-    }catch{}
+      const {data,error}=await supabaseClient.from("custom_rules")
+        .select("id,text,category").eq("user_id",user.id).eq("category",DAILY_MENTAL_CATEGORY).order("created_at");
+      if(!error){
+        for(const row of data||[]){
+          try{
+            const d=JSON.parse(row.text||"{}");
+            if(d.date && dates.includes(d.date)) byDate[d.date]={...(byDate[d.date]||{}),...d};
+          }catch{}
+        }
+      } else {
+        console.warn("心の状態のクラウド履歴を取得できません。ローカル履歴を使用します。",error);
+      }
+    }catch(e){
+      console.warn("心の状態のクラウド履歴取得失敗",e);
+    }
   }
+
   const points=dates.map(date=>({...empty(),date,...(byDate[date]||{})}));
   renderUrgeChart(points);
   await loadParameterTrendHistory(days);
-  if(note)note.textContent=`過去${days}日間の保存済み心の状態です。心の状態は0〜10、その他パラメーターは別スケールで表示しています。`;
+  if(note){
+    const savedDates=dates.filter(d=>byDate[d] && URGE_TYPES.some(t=>byDate[d][t.id]!==null && byDate[d][t.id]!==undefined)).length;
+    note.textContent=`過去${days}日間の保存済み心の状態：${savedDates}日分。保存前の入力は当日のグラフに即時反映されます。`;
+  }
 }
+
 function initUrgeChartTabs(){
   document.querySelectorAll(".urge-tab").forEach(btn=>btn.addEventListener("click",async()=>{
     document.querySelectorAll(".urge-tab").forEach(x=>x.classList.remove("active"));
@@ -909,30 +912,38 @@ async function saveUrges(){
   }
   if(!hasValue){ if(status)status.textContent="保存する項目を1つ以上選択してください。"; return; }
 
-  // ローカルにも保存（未ログインでも推移グラフに反映）
+  // まず端末に保存。これを推移グラフの一次データとして使用する。
   localStorage.setItem(`mentalState:${day()}`,JSON.stringify(values));
-  for(const [typeId,value] of Object.entries(values)){
-    if(typeId==="date"||value===null)continue;
-    // 当日の状態表示と既存チェック状態も維持
-    await saveUrgeLevel(typeId,value);
+  localStorage.removeItem("mentalState:draft");
+
+  // 現在画面の選択状態も更新（達成率には含めない）
+  for(const type of URGE_TYPES){
+    const value=values[type.id];
+    for(let level=0; level<=10; level++) delete state.checks[`urge:${type.id}:${level}`];
+    if(value!==null) state.checks[`urge:${type.id}:${value}`]=true;
   }
 
+  let cloudSaved=false;
   if(supabaseReady&&user){
-    // 心の状態そのものを日付単位の記録として保存。daily_check_statesに依存しない。
-    const find=await supabaseClient.from("custom_rules").select("id").eq("user_id",user.id)
-      .eq("category",DAILY_MENTAL_CATEGORY);
-    if(find.error){console.error(find.error); if(status)status.textContent=`⚠️ 心の状態の保存に失敗：${find.error.message}`; return;}
-    let rowId=null;
-    for(const row of find.data||[]){
-      try{if(JSON.parse(row.text||"{}").date===day()){rowId=row.id;break;}}catch{}
-    }
-    const payload=JSON.stringify(values);
-    const res=rowId
-      ? await supabaseClient.from("custom_rules").update({text:payload}).eq("id",rowId).eq("user_id",user.id).eq("category",DAILY_MENTAL_CATEGORY)
-      : await supabaseClient.from("custom_rules").insert({user_id:user.id,text:payload,category:DAILY_MENTAL_CATEGORY});
-    if(res.error){console.error(res.error); if(status)status.textContent=`⚠️ 心の状態の保存に失敗：${res.error.message}`; return;}
+    try{
+      const find=await supabaseClient.from("custom_rules").select("id,text,category")
+        .eq("user_id",user.id).eq("category",DAILY_MENTAL_CATEGORY);
+      if(!find.error){
+        let rowId=null;
+        for(const row of find.data||[]){
+          try{if(JSON.parse(row.text||"{}").date===day()){rowId=row.id;break;}}catch{}
+        }
+        const res=rowId
+          ? await supabaseClient.from("custom_rules").update({text:JSON.stringify(values)}).eq("id",rowId).eq("user_id",user.id).eq("category",DAILY_MENTAL_CATEGORY)
+          : await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify(values),category:DAILY_MENTAL_CATEGORY});
+        cloudSaved=!res.error;
+        if(res.error) console.warn("心の状態のクラウド保存失敗（端末には保存済み）",res.error);
+      }
+    }catch(e){ console.warn("心の状態のクラウド保存失敗（端末には保存済み）",e); }
   }
-  if(status)status.textContent="☁️ 心の状態を保存しました";
+
+  if(status)status.textContent=cloudSaved?"☁️ 心の状態を保存しました":"💾 この端末に心の状態を保存しました";
+  renderUrges();
   await loadUrgeHistory(urgeChartDays);
 }
 
@@ -950,7 +961,18 @@ function renderUrges(){
     }
     const current=getUrgeLevel(type.id);
     if(current!==null) select.value=String(current);
-    select.onchange=()=>{};
+    select.onchange=()=>{
+      const value=select.value===""?null:Number(select.value);
+      for(let level=0;level<=10;level++) delete state.checks[`urge:${type.id}:${level}`];
+      if(value!==null) state.checks[`urge:${type.id}:${value}`]=true;
+      const draft={date:day()};
+      for(const t of URGE_TYPES){
+        const el2=document.getElementById(`urge-${t.id}`);
+        draft[t.id]=(el2&&el2.value!=="")?Number(el2.value):null;
+      }
+      localStorage.setItem(`mentalState:draft`,JSON.stringify(draft));
+      loadUrgeHistory(urgeChartDays);
+    };
     row.append(label,select); wrap.appendChild(row);
   }
 }
