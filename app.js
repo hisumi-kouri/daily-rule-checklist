@@ -1,9 +1,29 @@
-const APP_VERSION = "v0.43";
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-
+const APP_VERSION = "v0.44";
 const SUPABASE_URL = "https://nhyikuzvigfzrcgetxej.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
-const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+let supabaseClient = null;
+
+function withTimeout(promise, ms=5000){
+  return Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error(`Supabase接続が${ms/1000}秒でタイムアウトしました。`)),ms))
+  ]);
+}
+
+async function initSupabaseClient(){
+  if(supabaseClient) return supabaseClient;
+  try{
+    setStatus("☁️ Supabaseライブラリを読み込んでいます…");
+    const mod=await withTimeout(import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"),7000);
+    const createClient=mod.createClient;
+    if(typeof createClient!=="function") throw new Error("Supabaseライブラリの読み込みに失敗しました。");
+    supabaseClient=createClient(SUPABASE_URL,SUPABASE_KEY);
+    return supabaseClient;
+  }catch(error){
+    supabaseClient=null;
+    throw error;
+  }
+}
 
 const base=[];
 
@@ -65,13 +85,6 @@ const signOutBtn=document.getElementById("signOutBtn");
 function setStatus(t){statusEl.textContent=t;}
 function setAuthMessage(t){document.getElementById("authMessage").textContent=t;}
 function setAnonAuthMessage(t){document.getElementById("anonAuthMessage").textContent=t;}
-function withTimeout(promise, ms=5000){
-  return Promise.race([
-    promise,
-    new Promise((_,reject)=>setTimeout(()=>reject(new Error(`Supabase接続が${ms/1000}秒でタイムアウトしました。`)),ms))
-  ]);
-}
-
 function baseItems(){
   const arr=[];
   for(const [cat,items] of base) for(const [text,source] of items) arr.push({cat,text,source});
@@ -620,7 +633,7 @@ function initHobby(){
 function getLocalReading(){ try{return JSON.parse(localStorage.getItem("readingBooks")||"[]")||[];}catch{return [];} }
 function setLocalReading(data){ localStorage.setItem("readingBooks",JSON.stringify(data)); }
 function normalizeReading(data){
-  return (Array.isArray(data)?data:[]).map((b,i)=>({id:b.id||`reading-local-${i}-${Date.now()}`,title:String(b.title||"作品"),author:String(b.author||""),genre:String(b.genre||""),percent:Math.min(100,Math.max(0,Number(b.percent)||0)}));
+  return (Array.isArray(data)?data:[]).map((b,i)=>({id:b.id||`reading-local-${i}-${Date.now()}`,title:String(b.title||"作品"),author:String(b.author||""),genre:String(b.genre||""),percent:Math.min(100,Math.max(0,Number(b.percent)||0))}));
 }
 function renderReading(){
   const list=document.getElementById("readingList"), count=document.getElementById("readingCount");
@@ -651,7 +664,7 @@ async function loadReading(){
   if(supabaseReady&&user){
     try{
       const res=await supabaseClient.from("custom_rules").select("id,text,category,created_at").eq("user_id",user.id).eq("category",READING_CATEGORY).order("created_at",{ascending:true});
-      if(!res.error&&res.data?.length){data=res.data.map(r=>{try{const x=JSON.parse(r.text||"{}");return {id:r.id,title:String(x.title||"作品"),author:String(x.author||""),genre:String(x.genre||""),percent:Math.min(100,Math.max(0,Number(x.percent)||0));}catch{return null;}}).filter(Boolean);setLocalReading(data);}
+      if(!res.error&&res.data?.length){data=res.data.map(r=>{try{const x=JSON.parse(r.text||"{}");return {id:r.id,title:String(x.title||"作品"),author:String(x.author||""),genre:String(x.genre||""),percent:Math.min(100,Math.max(0,Number(x.percent)||0))};}catch{return null;}}).filter(Boolean);setLocalReading(data);}
     }catch{}
   }
   state.reading=data; renderReading();
@@ -1580,17 +1593,20 @@ document.getElementById("changePasswordBtn").onclick=changePassword;
 document.getElementById("resetPasswordBtn").onclick=sendPasswordReset;
 document.getElementById("signOutBtn").onclick=logout;
 
-supabaseClient.auth.onAuthStateChange(async (_event, session)=>{
-  if(session && !supabaseOffline){
-    user=session.user; supabaseReady=true;
-    setStatus("☁️ クラウド同期中");
-    await updateAccountUI();
-  }
-});
+if(supabaseClient){
+  supabaseClient.auth.onAuthStateChange(async (_event, session)=>{
+    if(session && !supabaseOffline){
+      user=session.user; supabaseReady=true;
+      setStatus("☁️ クラウド同期中");
+      await updateAccountUI();
+    }
+  });
+}
 
 (async()=>{
   try{
-    setStatus("☁️ Supabaseへ接続しています…");
+    render();
+    await initSupabaseClient();
     await ensureSession();
   }catch(e){
     console.warn("Supabase接続失敗。端末保存モードへ移行します。",e);
