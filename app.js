@@ -1568,6 +1568,7 @@ supabaseClient.auth.onAuthStateChange(async (_event, session)=>{
 
 (async()=>{
   try{
+    setStatus("☁️ Supabaseへ接続しています…");
     await ensureSession();
   }catch(e){
     console.error(e);
