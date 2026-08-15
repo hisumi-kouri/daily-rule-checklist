@@ -7,6 +7,7 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 const base=[];
 
 let supabaseReady=false, user=null;
+let supabaseOffline=false;
 let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}, reading:[]};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
@@ -63,6 +64,12 @@ const signOutBtn=document.getElementById("signOutBtn");
 function setStatus(t){statusEl.textContent=t;}
 function setAuthMessage(t){document.getElementById("authMessage").textContent=t;}
 function setAnonAuthMessage(t){document.getElementById("anonAuthMessage").textContent=t;}
+function withTimeout(promise, ms=5000){
+  return Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error(`Supabase接続が${ms/1000}秒でタイムアウトしました。`)),ms))
+  ]);
+}
 
 function baseItems(){
   const arr=[];
@@ -833,31 +840,33 @@ async function updateAccountUI(){
 }
 
 async function ensureSession(){
-  setStatus("☁️ Supabaseへ接続中…");
-  try{
-    const {data,error}=await supabaseClient.auth.getSession();
-    if(error) throw error;
-    if(data.session){
-      user=data.session.user;
-    }else{
-      const res=await supabaseClient.auth.signInAnonymously();
-      if(res.error) throw res.error;
-      user=res.data.user;
-    }
-    supabaseReady=true;
-    setStatus("☁️ クラウド同期中");
-    await updateAccountUI();
-    try{ await loadCloud(); }catch(e){
-      console.error('Cloud load failed',e);
-      setStatus("⚠️ クラウド同期は未接続（端末保存で利用中）");
-      render();
-    }
-  }catch(e){
-    supabaseReady=false;
-    user=null;
-    setStatus("⚠️ Supabaseに接続できません（端末保存で利用中）");
-    throw e;
+  // Supabaseが利用できない環境でもアプリを止めず、端末保存モードへ切り替える。
+  const {data,error}=await withTimeout(supabaseClient.auth.getSession(),5000);
+  if(error) throw error;
+  if(data.session){
+    user=data.session.user;
+  }else{
+    const res=await withTimeout(supabaseClient.auth.signInAnonymously(),5000);
+    if(res.error) throw res.error;
+    user=res.data.user;
   }
+  supabaseReady=true;
+  supabaseOffline=false;
+  setStatus("☁️ クラウド同期中");
+  await updateAccountUI();
+  await loadCloud();
+  render();
+}
+
+async function enterOfflineMode(error){
+  supabaseReady=false;
+  supabaseOffline=true;
+  user=null;
+  setStatus("⚠️ Supabase未接続・端末保存モード");
+  if(accountStatus) accountStatus.textContent=`クラウド未接続：${error?.message||"接続できません"}`;
+  try{ await loadDailyParameters(); }catch{}
+  try{ await loadUrgeHistory(urgeChartDays); }catch{}
+  try{ await loadParameterTrendHistory(urgeChartDays); }catch{}
   render();
 }
 
@@ -1571,7 +1580,7 @@ document.getElementById("resetPasswordBtn").onclick=sendPasswordReset;
 document.getElementById("signOutBtn").onclick=logout;
 
 supabaseClient.auth.onAuthStateChange(async (_event, session)=>{
-  if(session){
+  if(session && !supabaseOffline){
     user=session.user; supabaseReady=true;
     setStatus("☁️ クラウド同期中");
     await updateAccountUI();
@@ -1583,9 +1592,7 @@ supabaseClient.auth.onAuthStateChange(async (_event, session)=>{
     setStatus("☁️ Supabaseへ接続しています…");
     await ensureSession();
   }catch(e){
-    console.error(e);
-    setStatus("⚠️ Supabase接続エラー");
-    accountStatus.textContent=e.message;
-    render();
+    console.warn("Supabase接続失敗。端末保存モードへ移行します。",e);
+    await enterOfflineMode(e);
   }
 })();

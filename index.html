@@ -4,9 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#4f46e5">
+  <script>
+    (async()=>{
+      try{
+        const key="drc_cache_reset_v042";
+        if(sessionStorage.getItem(key)!=="1"){
+          const regs=await navigator.serviceWorker?.getRegistrations?.()||[];
+          for(const r of regs){try{await r.unregister();}catch{}}
+          if(window.caches){const keys=await caches.keys(); for(const k of keys){try{await caches.delete(k);}catch{}}}
+          sessionStorage.setItem(key,"1");
+          if(regs.length||window.location.search){window.location.replace(window.location.pathname+"?v=0.42");}
+        }
+      }catch{}
+    })();
+  </script>
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=0.40">
-  <title>毎日のルールチェック v0.41</title>
+  <link rel="stylesheet" href="style.css?v=0.42">
+  <title>毎日のルールチェック v0.42</title>
 </head>
 <body>
   <header>
@@ -305,22 +319,7 @@
     </div>
   </main>
 
-  <footer>Supabase同期版 v0.41</footer>
-  <script>
-// GitHub Pagesで古いService Worker / キャッシュが残っていても最新UIを優先するための初期化
-(async()=>{
-  try{
-    if('serviceWorker' in navigator){
-      const regs=await navigator.serviceWorker.getRegistrations();
-      await Promise.all(regs.map(r=>r.unregister()));
-    }
-    if('caches' in window){
-      const keys=await caches.keys();
-      await Promise.all(keys.map(k=>caches.delete(k)));
-    }
-  }catch(e){ console.warn('cache reset skipped',e); }
-})();
-</script>
-<script type="module" src="app.js?v=0.41"></script>
+  <footer>Supabase同期版 v0.40</footer>
+  <script type="module" src="app.js?v=0.42"></script>
 </body>
 </html>
