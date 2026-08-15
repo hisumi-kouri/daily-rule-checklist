@@ -1,9 +1,9 @@
-const CACHE_NAME = "rule-check-v040";
+const CACHE_NAME = "rule-check-v043";
 const ASSETS = [
   "./",
   "./index.html",
-  "./style.css?v=0.40",
-  "./app.js?v=0.40",
+  "./style.css?v=0.43",
+  "./app.js?v=0.43",
   "./manifest.json"
 ];
 
