@@ -7,7 +7,7 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 const base=[];
 
 let supabaseReady=false, user=null;
-let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}};
+let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}, reading:[]};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
@@ -36,6 +36,7 @@ const DAILY_MENTAL_CATEGORY="__daily_mental__";
 const MURMUR_CATEGORY="__murmur__";
 const HOBBY_CATEGORY="__hobby__";
 const HOBBY_WORK_CATEGORY="__hobby_work__";
+const READING_CATEGORY="__reading__";
 const DEAR_MASTER_GOAL=100000000;
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
 const URGE_TYPES=[
@@ -608,6 +609,78 @@ function initHobby(){
   const btn=document.getElementById("addHobbyWorkBtn"); btn?.addEventListener("click",addHobbyWork); renderHobby();
 }
 
+function getLocalReading(){ try{return JSON.parse(localStorage.getItem("readingBooks")||"[]")||[];}catch{return [];} }
+function setLocalReading(data){ localStorage.setItem("readingBooks",JSON.stringify(data)); }
+function normalizeReading(data){
+  return (Array.isArray(data)?data:[]).map((b,i)=>({id:b.id||`reading-local-${i}-${Date.now()}`,title:String(b.title||"作品"),author:String(b.author||""),genre:String(b.genre||""),percent:Math.min(100,Math.max(0,Number(b.percent)||0)}));
+}
+function renderReading(){
+  const list=document.getElementById("readingList"), count=document.getElementById("readingCount");
+  if(!list||!count)return; const books=state.reading||[]; count.textContent=`${books.length}作品`; list.innerHTML="";
+  if(!books.length){const e=document.createElement("p");e.className="muted small";e.textContent="まだ読書作品がありません。";list.appendChild(e);return;}
+  books.forEach(book=>{
+    const row=document.createElement("article"); row.className="reading-book-card";
+    const top=document.createElement("div"); top.className="reading-book-top";
+    const check=document.createElement("input"); check.type="checkbox"; check.checked=book.percent>=100; check.title="読破済みにする";
+    check.addEventListener("change",async()=>{book.percent=check.checked?100:Math.min(book.percent,99); await saveReading(); renderReading();});
+    const title=document.createElement("span"); title.className="reading-book-title"; title.textContent=book.title;
+    top.append(check,title); row.appendChild(top);
+    const meta=document.createElement("div"); meta.className="reading-book-meta"; meta.textContent=`作者：${book.author||"未入力"}　｜　ジャンル：${book.genre||"未入力"}`; row.appendChild(meta);
+    const progress=document.createElement("div"); progress.className="reading-progress-wrap";
+    const head=document.createElement("div"); head.className="reading-progress-head"; head.innerHTML=`<strong>読破率 ${Number(book.percent).toFixed(0)}%</strong><span>${book.percent>=100?"読破済み":"読書中"}</span>`;
+    const range=document.createElement("input"); range.type="range"; range.min="0"; range.max="100"; range.step="1"; range.value=book.percent; range.setAttribute("aria-label",`${book.title}の読破率`);
+    range.addEventListener("input",()=>{book.percent=Number(range.value); head.querySelector("strong").textContent=`読破率 ${book.percent.toFixed(0)}%`;});
+    range.addEventListener("change",async()=>{await saveReading();renderReading();});
+    progress.append(head,range); row.appendChild(progress);
+    const actions=document.createElement("div"); actions.className="rule-actions reading-actions";
+    const edit=document.createElement("button"); edit.type="button"; edit.className="edit-rule"; edit.textContent="変更"; edit.onclick=()=>editReadingBook(book.id);
+    const del=document.createElement("button"); del.type="button"; del.className="delete-rule"; del.textContent="削除"; del.onclick=()=>deleteReadingBook(book.id);
+    actions.append(edit,del); row.append(actions); list.appendChild(row);
+  });
+}
+async function loadReading(){
+  let data=normalizeReading(getLocalReading());
+  if(supabaseReady&&user){
+    try{
+      const res=await supabaseClient.from("custom_rules").select("id,text,category,created_at").eq("user_id",user.id).eq("category",READING_CATEGORY).order("created_at",{ascending:true});
+      if(!res.error&&res.data?.length){data=res.data.map(r=>{try{const x=JSON.parse(r.text||"{}");return {id:r.id,title:String(x.title||"作品"),author:String(x.author||""),genre:String(x.genre||""),percent:Math.min(100,Math.max(0,Number(x.percent)||0));}catch{return null;}}).filter(Boolean);setLocalReading(data);}
+    }catch{}
+  }
+  state.reading=data; renderReading();
+}
+async function saveReading(){
+  setLocalReading(state.reading||[]); let cloudSaved=false;
+  if(supabaseReady&&user){
+    try{
+      const existing=await supabaseClient.from("custom_rules").select("id").eq("user_id",user.id).eq("category",READING_CATEGORY);
+      const currentIds=new Set((state.reading||[]).filter(b=>!String(b.id).startsWith("reading-local-")).map(b=>String(b.id)));
+      for(const b of state.reading||[]){const payload={title:b.title,author:b.author,genre:b.genre,percent:b.percent}; if(String(b.id).startsWith("reading-local-")){const ins=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify(payload),category:READING_CATEGORY}); if(!ins.error){b.id=ins.data?.[0]?.id||b.id;}} else {await supabaseClient.from("custom_rules").update({text:JSON.stringify(payload),category:READING_CATEGORY}).eq("id",b.id).eq("user_id",user.id);}}
+      for(const r of existing.data||[]){if(!currentIds.has(String(r.id))&&!state.reading.some(b=>String(b.id)===String(r.id))){await supabaseClient.from("custom_rules").delete().eq("id",r.id).eq("user_id",user.id);}}
+      cloudSaved=true;
+    }catch{}
+  }
+  setLocalReading(state.reading||[]); return cloudSaved;
+}
+async function addReadingBook(){
+  const title=document.getElementById("newReadingTitle")?.value.trim(); const author=document.getElementById("newReadingAuthor")?.value.trim(); const genre=document.getElementById("newReadingGenre")?.value.trim(); const percent=Math.min(100,Math.max(0,Number(document.getElementById("newReadingPercent")?.value||0)));
+  if(!title){alert("作品名を入力してください。");return;}
+  state.reading.push({id:`reading-local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,title,author,genre,percent}); await saveReading();
+  ["newReadingTitle","newReadingAuthor","newReadingGenre","newReadingPercent"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";}); renderReading();
+}
+async function editReadingBook(id){
+  const b=state.reading.find(x=>String(x.id)===String(id)); if(!b)return;
+  const title=prompt("作品名を変更してください。",b.title); if(title===null)return; if(!title.trim()){alert("作品名を空にはできません。");return;}
+  const author=prompt("作者を変更してください。",b.author); if(author===null)return;
+  const genre=prompt("ジャンルを変更してください。",b.genre); if(genre===null)return;
+  const percentInput=prompt("読破率（0～100%）を変更してください。",String(b.percent)); if(percentInput===null)return; const percent=Math.min(100,Math.max(0,Number(percentInput))); if(!Number.isFinite(percent)){alert("読破率が正しくありません。");return;}
+  b.title=title.trim();b.author=author.trim();b.genre=genre.trim();b.percent=percent;await saveReading();renderReading();
+}
+async function deleteReadingBook(id){
+  const idx=state.reading.findIndex(x=>String(x.id)===String(id));if(idx<0)return;const b=state.reading[idx];if(!confirm(`「${b.title}」を削除しますか？`))return;
+  if(supabaseReady&&user&&!String(b.id).startsWith("reading-local-")){try{await supabaseClient.from("custom_rules").delete().eq("id",b.id).eq("user_id",user.id);}catch{}}
+  state.reading.splice(idx,1);setLocalReading(state.reading);renderReading();
+}
+function initReading(){document.getElementById("addReadingBtn")?.addEventListener("click",addReadingBook);renderReading();}
 function renderMurmurs(){
   const list=document.getElementById("murmurList"), count=document.getElementById("murmurCount"), pager=document.getElementById("murmurPagination");
   if(!list||!count||!pager)return;
@@ -1376,6 +1449,7 @@ const recordTab=document.getElementById("recordTab");
 const murmurTab=document.getElementById("murmurTab");
 const reportTab=document.getElementById("reportTab");
 const hobbyTab=document.getElementById("hobbyTab");
+const readingTab=document.getElementById("readingTab");
 const categoriesEl=document.getElementById("categories");
 const addRulesEl=document.querySelector("section.add");
 if(checksheetTab && categoriesEl && addRulesEl){
@@ -1389,6 +1463,7 @@ function switchAppTab(name){
   murmurTab?.classList.toggle("active",name==="murmur");
   reportTab?.classList.toggle("active",name==="report");
   hobbyTab?.classList.toggle("active",name==="hobby");
+  readingTab?.classList.toggle("active",name==="reading");
 }
 document.querySelectorAll(".app-tab").forEach(btn=>btn.addEventListener("click",()=>switchAppTab(btn.dataset.tab)));
 switchAppTab("record");
@@ -1405,6 +1480,8 @@ function refreshCategoryOptions(){
 
 document.getElementById("date").textContent=new Intl.DateTimeFormat("ja-JP",{dateStyle:"full"}).format(new Date());
 initUrgeChartTabs();
+initReading();
+loadReading();
 initMurmurs();
 initReport();
 initHobby();

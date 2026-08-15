@@ -25,6 +25,7 @@
     <button type="button" class="app-tab" data-tab="murmur">💭 呟き</button>
     <button type="button" class="app-tab" data-tab="report">📝 報告</button>
     <button type="button" class="app-tab" data-tab="hobby">🎨 趣味</button>
+    <button type="button" class="app-tab" data-tab="reading">📖 読書</button>
   </nav>
 
   <main>
@@ -75,6 +76,26 @@
           </select>
           <input id="newHobbyGoal" type="number" min="1" step="1" placeholder="目標文字数">
           <button type="button" id="addHobbyWorkBtn">作品を追加</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="readingTab" class="tab-panel">
+      <section class="card reading-head">
+        <div class="section-head"><div><h2>📖 読書</h2><p class="muted">作品ごとに読書の進捗を記録できます。</p></div><span id="readingCount" class="muted small">0作品</span></div>
+      </section>
+      <section class="card reading-card">
+        <div class="section-head"><h2>📚 読書作品</h2><span class="muted small">チェックリスト形式</span></div>
+        <div id="readingList" class="reading-list"></div>
+      </section>
+      <section class="card reading-card">
+        <div class="section-head"><h2>➕ 作品追加</h2><span class="muted small">作品名・作者・ジャンル・読破率を設定</span></div>
+        <div class="form reading-add-form">
+          <input id="newReadingTitle" placeholder="作品名" maxlength="200">
+          <input id="newReadingAuthor" placeholder="作者" maxlength="100">
+          <input id="newReadingGenre" placeholder="ジャンル" maxlength="100">
+          <input id="newReadingPercent" type="number" min="0" max="100" step="1" placeholder="読破率（%）">
+          <button type="button" id="addReadingBtn">作品を追加</button>
         </div>
       </section>
     </div>
