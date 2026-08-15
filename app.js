@@ -632,27 +632,54 @@ function initHobby(){
 
 function getLocalReading(){ try{return JSON.parse(localStorage.getItem("readingBooks")||"[]")||[];}catch{return [];} }
 function setLocalReading(data){ localStorage.setItem("readingBooks",JSON.stringify(data)); }
+function calcReadingPercent(book){
+  const total=Math.max(0,Number(book.totalPages)||0);
+  const current=Math.max(0,Number(book.currentPage)||0);
+  if(total>0) return Math.min(100,Math.max(0,Math.round(current/total*10000)/100));
+  return Math.min(100,Math.max(0,Number(book.percent)||0));
+}
 function normalizeReading(data){
-  return (Array.isArray(data)?data:[]).map((b,i)=>({id:b.id||`reading-local-${i}-${Date.now()}`,title:String(b.title||"作品"),author:String(b.author||""),genre:String(b.genre||""),percent:Math.min(100,Math.max(0,Number(b.percent)||0))}));
+  return (Array.isArray(data)?data:[]).map((b,i)=>{
+    const totalPages=Math.max(0,Number(b.totalPages)||0);
+    const currentPage=Math.min(totalPages>0?totalPages:Number.MAX_SAFE_INTEGER,Math.max(0,Number(b.currentPage)||0));
+    const book={id:b.id||`reading-local-${i}-${Date.now()}`,title:String(b.title||"作品"),author:String(b.author||""),genre:String(b.genre||""),totalPages,currentPage,percent:Math.min(100,Math.max(0,Number(b.percent)||0))};
+    book.percent=calcReadingPercent(book);
+    return book;
+  });
 }
 function renderReading(){
   const list=document.getElementById("readingList"), count=document.getElementById("readingCount");
   if(!list||!count)return; const books=state.reading||[]; count.textContent=`${books.length}作品`; list.innerHTML="";
   if(!books.length){const e=document.createElement("p");e.className="muted small";e.textContent="まだ読書作品がありません。";list.appendChild(e);return;}
   books.forEach(book=>{
+    book.percent=calcReadingPercent(book);
     const row=document.createElement("article"); row.className="reading-book-card";
     const top=document.createElement("div"); top.className="reading-book-top";
     const check=document.createElement("input"); check.type="checkbox"; check.checked=book.percent>=100; check.title="読破済みにする";
-    check.addEventListener("change",async()=>{book.percent=check.checked?100:Math.min(book.percent,99); await saveReading(); renderReading();});
+    check.addEventListener("change",async()=>{
+      if(check.checked){ if(Number(book.totalPages)>0) book.currentPage=book.totalPages; book.percent=100; }
+      else { if(Number(book.totalPages)>0) book.currentPage=Math.max(0,Math.min(book.currentPage,book.totalPages-1)); book.percent=calcReadingPercent(book); }
+      await saveReading(); renderReading();
+    });
     const title=document.createElement("span"); title.className="reading-book-title"; title.textContent=book.title;
     top.append(check,title); row.appendChild(top);
     const meta=document.createElement("div"); meta.className="reading-book-meta"; meta.textContent=`作者：${book.author||"未入力"}　｜　ジャンル：${book.genre||"未入力"}`; row.appendChild(meta);
+    const pageMeta=document.createElement("div"); pageMeta.className="reading-page-meta";
+    if(Number(book.totalPages)>0) pageMeta.textContent=`${book.currentPage} / ${book.totalPages} ページ`;
+    else pageMeta.textContent=`ページ情報未設定（旧データの読破率 ${Number(book.percent).toFixed(0)}%）`;
+    row.appendChild(pageMeta);
     const progress=document.createElement("div"); progress.className="reading-progress-wrap";
-    const head=document.createElement("div"); head.className="reading-progress-head"; head.innerHTML=`<strong>読破率 ${Number(book.percent).toFixed(0)}%</strong><span>${book.percent>=100?"読破済み":"読書中"}</span>`;
-    const range=document.createElement("input"); range.type="range"; range.min="0"; range.max="100"; range.step="1"; range.value=book.percent; range.setAttribute("aria-label",`${book.title}の読破率`);
-    range.addEventListener("input",()=>{book.percent=Number(range.value); head.querySelector("strong").textContent=`読破率 ${book.percent.toFixed(0)}%`;});
+    const head=document.createElement("div"); head.className="reading-progress-head"; head.innerHTML=`<strong>読破率 ${Number(book.percent).toFixed(1)}%</strong><span>${book.percent>=100?"読破済み":"読書中"}</span>`;
+    const range=document.createElement("input"); range.type="range"; range.min="0"; range.max=String(Math.max(1,Number(book.totalPages)||100)); range.step="1"; range.value=String(Number(book.totalPages)>0?book.currentPage:Math.round((book.percent/100)*100)); range.setAttribute("aria-label",`${book.title}の現在ページ`);
+    if(Number(book.totalPages)<=0){ range.disabled=true; range.title="総ページ数を設定すると自動計算できます"; }
+    range.addEventListener("input",()=>{
+      if(Number(book.totalPages)>0){ book.currentPage=Math.min(book.totalPages,Math.max(0,Number(range.value))); book.percent=calcReadingPercent(book); }
+      const strong=head.querySelector("strong"); if(strong) strong.textContent=`読破率 ${Number(book.percent).toFixed(1)}%`;
+      pageMeta.textContent=Number(book.totalPages)>0?`${book.currentPage} / ${book.totalPages} ページ`:pageMeta.textContent;
+    });
     range.addEventListener("change",async()=>{await saveReading();renderReading();});
-    progress.append(head,range); row.appendChild(progress);
+    const pageHint=document.createElement("div"); pageHint.className="muted small"; pageHint.textContent=Number(book.totalPages)>0?"スライダーは現在ページ。読破率を自動計算します。":"変更から総ページ数と現在ページを設定してください。";
+    progress.append(head,range,pageHint); row.appendChild(progress);
     const actions=document.createElement("div"); actions.className="rule-actions reading-actions";
     const edit=document.createElement("button"); edit.type="button"; edit.className="edit-rule"; edit.textContent="変更"; edit.onclick=()=>editReadingBook(book.id);
     const del=document.createElement("button"); del.type="button"; del.className="delete-rule"; del.textContent="削除"; del.onclick=()=>deleteReadingBook(book.id);
@@ -664,18 +691,19 @@ async function loadReading(){
   if(supabaseReady&&user){
     try{
       const res=await supabaseClient.from("custom_rules").select("id,text,category,created_at").eq("user_id",user.id).eq("category",READING_CATEGORY).order("created_at",{ascending:true});
-      if(!res.error&&res.data?.length){data=res.data.map(r=>{try{const x=JSON.parse(r.text||"{}");return {id:r.id,title:String(x.title||"作品"),author:String(x.author||""),genre:String(x.genre||""),percent:Math.min(100,Math.max(0,Number(x.percent)||0))};}catch{return null;}}).filter(Boolean);setLocalReading(data);}
+      if(!res.error&&res.data?.length){data=res.data.map(r=>{try{const x=JSON.parse(r.text||"{}");const b={id:r.id,title:String(x.title||"作品"),author:String(x.author||""),genre:String(x.genre||""),totalPages:Math.max(0,Number(x.totalPages)||0),currentPage:Math.max(0,Number(x.currentPage)||0),percent:Math.min(100,Math.max(0,Number(x.percent)||0))};b.percent=calcReadingPercent(b);return b;}catch{return null;}}).filter(Boolean);setLocalReading(data);}
     }catch{}
   }
   state.reading=data; renderReading();
 }
 async function saveReading(){
-  setLocalReading(state.reading||[]); let cloudSaved=false;
+  state.reading=(state.reading||[]).map(b=>({...b,percent:calcReadingPercent(b)}));
+  setLocalReading(state.reading); let cloudSaved=false;
   if(supabaseReady&&user){
     try{
       const existing=await supabaseClient.from("custom_rules").select("id").eq("user_id",user.id).eq("category",READING_CATEGORY);
       const currentIds=new Set((state.reading||[]).filter(b=>!String(b.id).startsWith("reading-local-")).map(b=>String(b.id)));
-      for(const b of state.reading||[]){const payload={title:b.title,author:b.author,genre:b.genre,percent:b.percent}; if(String(b.id).startsWith("reading-local-")){const ins=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify(payload),category:READING_CATEGORY}); if(!ins.error){b.id=ins.data?.[0]?.id||b.id;}} else {await supabaseClient.from("custom_rules").update({text:JSON.stringify(payload),category:READING_CATEGORY}).eq("id",b.id).eq("user_id",user.id);}}
+      for(const b of state.reading||[]){const payload={title:b.title,author:b.author,genre:b.genre,totalPages:Number(b.totalPages)||0,currentPage:Number(b.currentPage)||0,percent:calcReadingPercent(b)}; if(String(b.id).startsWith("reading-local-")){const ins=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify(payload),category:READING_CATEGORY}); if(!ins.error){b.id=ins.data?.[0]?.id||b.id;}} else {await supabaseClient.from("custom_rules").update({text:JSON.stringify(payload),category:READING_CATEGORY}).eq("id",b.id).eq("user_id",user.id);}}
       for(const r of existing.data||[]){if(!currentIds.has(String(r.id))&&!state.reading.some(b=>String(b.id)===String(r.id))){await supabaseClient.from("custom_rules").delete().eq("id",r.id).eq("user_id",user.id);}}
       cloudSaved=true;
     }catch{}
@@ -683,18 +711,20 @@ async function saveReading(){
   setLocalReading(state.reading||[]); return cloudSaved;
 }
 async function addReadingBook(){
-  const title=document.getElementById("newReadingTitle")?.value.trim(); const author=document.getElementById("newReadingAuthor")?.value.trim(); const genre=document.getElementById("newReadingGenre")?.value.trim(); const percent=Math.min(100,Math.max(0,Number(document.getElementById("newReadingPercent")?.value||0)));
+  const title=document.getElementById("newReadingTitle")?.value.trim(); const author=document.getElementById("newReadingAuthor")?.value.trim(); const genre=document.getElementById("newReadingGenre")?.value.trim(); const totalPages=Math.max(0,Math.floor(Number(document.getElementById("newReadingTotalPages")?.value||0))); const currentPage=Math.min(totalPages,Math.max(0,Math.floor(Number(document.getElementById("newReadingCurrentPage")?.value||0))));
   if(!title){alert("作品名を入力してください。");return;}
-  state.reading.push({id:`reading-local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,title,author,genre,percent}); await saveReading();
-  ["newReadingTitle","newReadingAuthor","newReadingGenre","newReadingPercent"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";}); renderReading();
+  if(!totalPages){alert("総ページ数を入力してください。");return;}
+  state.reading.push({id:`reading-local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,title,author,genre,totalPages,currentPage,percent:calcReadingPercent({totalPages,currentPage})}); await saveReading();
+  ["newReadingTitle","newReadingAuthor","newReadingGenre","newReadingTotalPages","newReadingCurrentPage"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";}); renderReading();
 }
 async function editReadingBook(id){
   const b=state.reading.find(x=>String(x.id)===String(id)); if(!b)return;
   const title=prompt("作品名を変更してください。",b.title); if(title===null)return; if(!title.trim()){alert("作品名を空にはできません。");return;}
   const author=prompt("作者を変更してください。",b.author); if(author===null)return;
   const genre=prompt("ジャンルを変更してください。",b.genre); if(genre===null)return;
-  const percentInput=prompt("読破率（0～100%）を変更してください。",String(b.percent)); if(percentInput===null)return; const percent=Math.min(100,Math.max(0,Number(percentInput))); if(!Number.isFinite(percent)){alert("読破率が正しくありません。");return;}
-  b.title=title.trim();b.author=author.trim();b.genre=genre.trim();b.percent=percent;await saveReading();renderReading();
+  const totalInput=prompt("総ページ数を入力してください。",String(b.totalPages||"")); if(totalInput===null)return; const totalPages=Math.floor(Number(totalInput)); if(!Number.isFinite(totalPages)||totalPages<=0){alert("総ページ数は1以上で入力してください。");return;}
+  const currentInput=prompt("現在ページを入力してください。",String(Math.min(b.currentPage||0,totalPages))); if(currentInput===null)return; const currentPage=Math.min(totalPages,Math.max(0,Math.floor(Number(currentInput)))); if(!Number.isFinite(currentPage)){alert("現在ページが正しくありません。");return;}
+  b.title=title.trim();b.author=author.trim();b.genre=genre.trim();b.totalPages=totalPages;b.currentPage=currentPage;b.percent=calcReadingPercent(b);await saveReading();renderReading();
 }
 async function deleteReadingBook(id){
   const idx=state.reading.findIndex(x=>String(x.id)===String(id));if(idx<0)return;const b=state.reading[idx];if(!confirm(`「${b.title}」を削除しますか？`))return;

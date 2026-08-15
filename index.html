@@ -90,12 +90,13 @@
         <div id="readingList" class="reading-list"></div>
       </section>
       <section class="card reading-card">
-        <div class="section-head"><h2>➕ 作品追加</h2><span class="muted small">作品名・作者・ジャンル・読破率を設定</span></div>
+        <div class="section-head"><h2>➕ 作品追加</h2><span class="muted small">作品名・作者・ジャンル・総ページ数・現在ページを設定</span></div>
         <div class="form reading-add-form">
           <input id="newReadingTitle" placeholder="作品名" maxlength="200">
           <input id="newReadingAuthor" placeholder="作者" maxlength="100">
           <input id="newReadingGenre" placeholder="ジャンル" maxlength="100">
-          <input id="newReadingPercent" type="number" min="0" max="100" step="1" placeholder="読破率（%）">
+          <input id="newReadingTotalPages" type="number" min="1" step="1" placeholder="総ページ数">
+          <input id="newReadingCurrentPage" type="number" min="0" step="1" placeholder="現在ページ">
           <button type="button" id="addReadingBtn">作品を追加</button>
         </div>
       </section>
