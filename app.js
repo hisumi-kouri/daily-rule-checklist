@@ -833,19 +833,31 @@ async function updateAccountUI(){
 }
 
 async function ensureSession(){
-  const {data,error}=await supabaseClient.auth.getSession();
-  if(error) throw error;
-  if(data.session){
-    user=data.session.user;
-  }else{
-    const res=await supabaseClient.auth.signInAnonymously();
-    if(res.error) throw res.error;
-    user=res.data.user;
+  setStatus("☁️ Supabaseへ接続中…");
+  try{
+    const {data,error}=await supabaseClient.auth.getSession();
+    if(error) throw error;
+    if(data.session){
+      user=data.session.user;
+    }else{
+      const res=await supabaseClient.auth.signInAnonymously();
+      if(res.error) throw res.error;
+      user=res.data.user;
+    }
+    supabaseReady=true;
+    setStatus("☁️ クラウド同期中");
+    await updateAccountUI();
+    try{ await loadCloud(); }catch(e){
+      console.error('Cloud load failed',e);
+      setStatus("⚠️ クラウド同期は未接続（端末保存で利用中）");
+      render();
+    }
+  }catch(e){
+    supabaseReady=false;
+    user=null;
+    setStatus("⚠️ Supabaseに接続できません（端末保存で利用中）");
+    throw e;
   }
-  supabaseReady=true;
-  setStatus("☁️ クラウド同期中");
-  await updateAccountUI();
-  await loadCloud();
   render();
 }
 

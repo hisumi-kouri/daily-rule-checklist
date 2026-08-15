@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#4f46e5">
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css?v=0.40">
-  <title>毎日のルールチェック v0.40</title>
+  <title>毎日のルールチェック v0.41</title>
 </head>
 <body>
   <header>
@@ -305,7 +305,22 @@
     </div>
   </main>
 
-  <footer>Supabase同期版 v0.40</footer>
-  <script type="module" src="app.js?v=0.40"></script>
+  <footer>Supabase同期版 v0.41</footer>
+  <script>
+// GitHub Pagesで古いService Worker / キャッシュが残っていても最新UIを優先するための初期化
+(async()=>{
+  try{
+    if('serviceWorker' in navigator){
+      const regs=await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r=>r.unregister()));
+    }
+    if('caches' in window){
+      const keys=await caches.keys();
+      await Promise.all(keys.map(k=>caches.delete(k)));
+    }
+  }catch(e){ console.warn('cache reset skipped',e); }
+})();
+</script>
+<script type="module" src="app.js?v=0.41"></script>
 </body>
 </html>
