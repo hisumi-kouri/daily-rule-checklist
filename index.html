@@ -22,12 +22,33 @@
   <nav class="app-tabs" aria-label="アプリ内メニュー">
     <button type="button" class="app-tab active" data-tab="record">📊 記録・分析</button>
     <button type="button" class="app-tab" data-tab="checksheet">📋 今日のチェックシート</button>
+    <button type="button" class="app-tab" data-tab="murmur">💭 呟き</button>
   </nav>
 
   <main>
     <div id="checksheetTab" class="tab-panel active">
       <section class="card checksheet-head">
         <div class="section-head"><div><h2>📋 今日のチェックシート</h2><p class="muted">基本・生活・職場・今日の振り返りに分けて確認します。</p></div><span id="checksheetDate" class="muted small"></span></div>
+      </section>
+    </div>
+    <div id="murmurTab" class="tab-panel">
+      <section class="card murmur-head">
+        <div class="section-head"><div><h2>💭 呟き</h2><p class="muted">日付・気分・呟き内容を記録できます。20件ごとにページ分けします。</p></div></div>
+      </section>
+      <section class="card murmur-card">
+        <div class="section-head"><h2>新しい呟きを記録</h2><span class="muted small">気分は0〜10</span></div>
+        <div class="murmur-form">
+          <label>日付<input id="murmurDate" type="date"></label>
+          <label>気分<select id="murmurMood"></select></label>
+          <label class="murmur-content-label">呟き内容<textarea id="murmurText" rows="5" maxlength="2000" placeholder="今日思ったこと、感じたことを書いてください"></textarea></label>
+          <button type="button" id="saveMurmurBtn" class="parameter-save">💾 呟きを保存</button>
+        </div>
+        <p id="murmurSaveStatus" class="muted small"></p>
+      </section>
+      <section class="card murmur-list-card">
+        <div class="section-head"><h2>保存した呟き</h2><span id="murmurCount" class="muted small">0件</span></div>
+        <div id="murmurList" class="murmur-list"></div>
+        <div id="murmurPagination" class="murmur-pagination"></div>
       </section>
     </div>
     <div id="recordTab" class="tab-panel">

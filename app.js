@@ -7,7 +7,7 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 const base=[];
 
 let supabaseReady=false, user=null;
-let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null};
+let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
@@ -33,6 +33,7 @@ const PRIORITY_SENTINEL_TEXT="__priority_initialized_v1__";
 const MEDICATION_CATEGORY="__medication__";
 const DAILY_PARAMETER_CATEGORY="__daily_parameters__";
 const DAILY_MENTAL_CATEGORY="__daily_mental__";
+const MURMUR_CATEGORY="__murmur__";
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
 const URGE_TYPES=[
   {id:"vanish",label:"消えたい衝動"},
@@ -448,6 +449,86 @@ async function saveDailyParameters(){
   await loadParameterTrendHistory();
 }
 
+function getLocalMurmurs(){
+  try{ return JSON.parse(localStorage.getItem("murmurs")||"[]") || []; }catch{return [];}
+}
+function setLocalMurmurs(items){ localStorage.setItem("murmurs",JSON.stringify(items)); }
+async function loadMurmurs(){
+  const local=getLocalMurmurs();
+  const merged=[...local];
+  if(supabaseReady&&user){
+    try{
+      const res=await supabaseClient.from("custom_rules").select("id,text,category,created_at").eq("user_id",user.id).eq("category",MURMUR_CATEGORY).order("created_at",{ascending:false});
+      if(!res.error){
+        const cloud=[];
+        for(const row of res.data||[]){ try{ const d=JSON.parse(row.text||"{}"); if(d.date&&d.text!==undefined) cloud.push({id:row.id,date:d.date,mood:d.mood??null,text:d.text,createdAt:row.created_at}); }catch{} }
+        const byId=new Map(merged.map(x=>[String(x.id),x]));
+        for(const x of cloud)byId.set(String(x.id),x);
+        // keep same-text/date local entries if cloud ids differ
+        for(const x of local){ if(!merged.some(m=>m.id===x.id)) merged.push(x); }
+        state.murmurs=[...byId.values()];
+      }else state.murmurs=merged;
+    }catch{ state.murmurs=merged; }
+  }else state.murmurs=merged;
+  state.murmurs.sort((a,b)=>{ const da=(b.date||"").localeCompare(a.date||""); return da!==0?da:(Number(b.createdAt||0)-Number(a.createdAt||0)); });
+  renderMurmurs();
+}
+function renderMurmurs(){
+  const list=document.getElementById("murmurList"), count=document.getElementById("murmurCount"), pager=document.getElementById("murmurPagination");
+  if(!list||!count||!pager)return;
+  const items=state.murmurs||[]; const total=items.length; count.textContent=`${total}件`;
+  const pageSize=20; const pages=Math.max(1,Math.ceil(total/pageSize)); if(state.murmurPage>pages)state.murmurPage=pages;
+  const start=(state.murmurPage-1)*pageSize; const pageItems=items.slice(start,start+pageSize);
+  list.innerHTML="";
+  if(!pageItems.length){ const empty=document.createElement("p"); empty.className="muted small"; empty.textContent="まだ呟きはありません。"; list.appendChild(empty); }
+  pageItems.forEach(item=>{
+    const row=document.createElement("article"); row.className="murmur-entry";
+    const meta=document.createElement("div"); meta.className="murmur-entry-meta"; meta.textContent=`${item.date||"日付未設定"}　気分 ${item.mood??"未選択"}/10`;
+    const body=document.createElement("div"); body.className="murmur-entry-body"; body.textContent=item.text||"";
+    const actions=document.createElement("div"); actions.className="murmur-actions";
+    const del=document.createElement("button"); del.type="button"; del.className="delete-rule"; del.textContent="削除"; del.onclick=()=>deleteMurmur(item.id);
+    actions.appendChild(del); row.append(meta,body,actions); list.appendChild(row);
+  });
+  pager.innerHTML="";
+  if(pages>1){
+    const prev=document.createElement("button"); prev.type="button"; prev.textContent="‹ 前へ"; prev.disabled=state.murmurPage===1; prev.onclick=()=>{state.murmurPage--;renderMurmurs();}; pager.appendChild(prev);
+    const info=document.createElement("span"); info.textContent=`${state.murmurPage} / ${pages}`; pager.appendChild(info);
+    const next=document.createElement("button"); next.type="button"; next.textContent="次へ ›"; next.disabled=state.murmurPage===pages; next.onclick=()=>{state.murmurPage++;renderMurmurs();}; pager.appendChild(next);
+  }
+}
+async function saveMurmur(){
+  const date=document.getElementById("murmurDate")?.value || day();
+  const moodRaw=document.getElementById("murmurMood")?.value || "";
+  const text=document.getElementById("murmurText")?.value.trim() || "";
+  const status=document.getElementById("murmurSaveStatus");
+  if(!text){ if(status)status.textContent="呟き内容を入力してください。"; return; }
+  const item={id:`local-${Date.now()}`,date,mood:moodRaw===""?null:Number(moodRaw),text,createdAt:Date.now()};
+  const local=getLocalMurmurs(); local.unshift(item); setLocalMurmurs(local);
+  state.murmurs=[item,...(state.murmurs||[])]; state.murmurPage=1;
+  let cloudSaved=false;
+  if(supabaseReady&&user){
+    try{ const payload={date,mood:item.mood,text}; const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify(payload),category:MURMUR_CATEGORY}).select("id,created_at").single();
+      if(!res.error){ item.id=res.data.id; item.createdAt=res.data.created_at; const updated=getLocalMurmurs().map(x=>x.id.startsWith("local-")&&x.date===date&&x.text===text&&x.createdAt===item.createdAt?item:x); setLocalMurmurs(updated); state.murmurs=state.murmurs.map(x=>x===item?item:x); cloudSaved=true; }
+    }catch(e){console.warn("呟きクラウド保存失敗",e);}
+  }
+  document.getElementById("murmurText").value=""; document.getElementById("murmurMood").value="";
+  if(status)status.textContent=cloudSaved?"☁️ 呟きを保存しました":"💾 この端末に呟きを保存しました";
+  renderMurmurs();
+}
+async function deleteMurmur(id){
+  const item=(state.murmurs||[]).find(x=>String(x.id)===String(id)); if(!item)return;
+  if(!confirm("この呟きを削除しますか？"))return;
+  const local=getLocalMurmurs().filter(x=>String(x.id)!==String(id)); setLocalMurmurs(local);
+  if(supabaseReady&&user&&!String(id).startsWith("local-")){ try{await supabaseClient.from("custom_rules").delete().eq("id",id).eq("user_id",user.id).eq("category",MURMUR_CATEGORY);}catch{} }
+  state.murmurs=state.murmurs.filter(x=>String(x.id)!==String(id)); renderMurmurs();
+}
+function initMurmurs(){
+  const date=document.getElementById("murmurDate"); if(date)date.value=day();
+  const mood=document.getElementById("murmurMood"); if(mood){ mood.innerHTML='<option value="">選択してください</option>'; for(let i=0;i<=10;i++){const o=document.createElement("option");o.value=String(i);o.textContent=`${i} / 10`;mood.appendChild(o);} }
+  document.getElementById("saveMurmurBtn")?.addEventListener("click",saveMurmur);
+  loadMurmurs();
+}
+
 async function loadCloud(){
   if(!supabaseReady||!user)return;
   await removeDeletedCategories();
@@ -479,6 +560,7 @@ async function loadCloud(){
     .map(x=>({id:x.id,text:x.text}));
   state.medications=rows.filter(x=>x.category===MEDICATION_CATEGORY).map(parseMedicationRow);
   await loadDailyParameters();
+  await loadMurmurs();
   render();
   await loadAchievementHistory();
   await loadUrgeHistory(urgeChartDays);
@@ -650,7 +732,7 @@ async function sendPasswordReset(){
 async function logout(){
   const {error}=await supabaseClient.auth.signOut();
   if(error){alert(error.message); return;}
-  user=null; state={checks:{},custom:[],priority:[],medications:[]};
+  user=null; state={checks:{},custom:[],priority:[],medications:[],parameters:{sleepHours:"",hallucinations:[],note:""},parameterRowId:null,murmurs:[],murmurPage:1};
   setStatus("ログアウトしました");
   accountStatus.textContent="ログアウトしました。再ログインは次のログイン画面から行えます。";
   signOutBtn.classList.add("hidden");
@@ -1123,6 +1205,7 @@ function render(){
 // タブ切り替え：今日のチェックシートにルール一覧とルール追加を集約
 const checksheetTab=document.getElementById("checksheetTab");
 const recordTab=document.getElementById("recordTab");
+const murmurTab=document.getElementById("murmurTab");
 const categoriesEl=document.getElementById("categories");
 const addRulesEl=document.querySelector("section.add");
 if(checksheetTab && categoriesEl && addRulesEl){
@@ -1133,6 +1216,7 @@ function switchAppTab(name){
   document.querySelectorAll(".app-tab").forEach(btn=>btn.classList.toggle("active",btn.dataset.tab===name));
   checksheetTab?.classList.toggle("active",name==="checksheet");
   recordTab?.classList.toggle("active",name==="record");
+  murmurTab?.classList.toggle("active",name==="murmur");
 }
 document.querySelectorAll(".app-tab").forEach(btn=>btn.addEventListener("click",()=>switchAppTab(btn.dataset.tab)));
 switchAppTab("record");
@@ -1149,6 +1233,7 @@ function refreshCategoryOptions(){
 
 document.getElementById("date").textContent=new Intl.DateTimeFormat("ja-JP",{dateStyle:"full"}).format(new Date());
 initUrgeChartTabs();
+initMurmurs();
 
 
 document.getElementById("addMedicationBtn").onclick=async()=>{
