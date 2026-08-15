@@ -201,3 +201,5 @@ footer{color:#9b8f85}
 
 .hobby-work-card{border:1px solid rgba(111,78,55,.14);border-radius:18px;padding:16px;margin:12px 0;background:rgba(255,255,255,.65)}.hobby-work-card h3{margin:0}.hobby-work-meta{font-size:12px;color:#7c6657;margin-bottom:8px}.hobby-add-work{margin-top:18px;padding-top:16px;border-top:1px solid rgba(111,78,55,.12)}.hobby-work-add-form{display:grid;grid-template-columns:1fr 220px auto;gap:10px}.hobby-work-add-form input{min-width:0}.hobby-work-progress{margin-top:12px}.hobby-work-progress .hobby-progress{height:12px}.hobby-work-progress .hobby-progress>div{height:100%;border-radius:999px;background:linear-gradient(90deg,#7c9a86,#c79a6b)}
 @media(max-width:720px){.hobby-work-add-form{grid-template-columns:1fr}.hobby-work-add-form button{width:100%}}
+
+.hobby-work-add-form select{min-width:180px}.hobby-card h2{margin-bottom:4px}

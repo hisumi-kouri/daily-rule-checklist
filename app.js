@@ -488,38 +488,45 @@ function normalizeHobby(data){
   const works=Array.isArray(data?.works)?data.works.map((w,i)=>({id:w.id||`local-${i}-${Date.now()}`,title:String(w.title||"作品"),goal:Math.max(1,Number(w.goal)||DEAR_MASTER_GOAL),text:String(w.text||"")})):[];
   let legacy=typeof data?.dearMaster==="string"?data.dearMaster:"";
   if(!works.length){
-    works.push({id:"dear-master",title:"# Dear Master",goal:DEAR_MASTER_GOAL,text:legacy});
+    works.push({id:"dear-master",title:"# Dear Master",goal:DEAR_MASTER_GOAL,text:legacy,type:"long"});
   }else if(legacy && !works.some(w=>w.id==="dear-master")){
-    works.unshift({id:"dear-master",title:"# Dear Master",goal:DEAR_MASTER_GOAL,text:legacy});
+    works.unshift({id:"dear-master",title:"# Dear Master",goal:DEAR_MASTER_GOAL,text:legacy,type:"long"});
   }
   return {dearMaster:works.find(w=>w.id==="dear-master")?.text||"",works};
 }
 function renderHobby(){
-  const wrap=document.getElementById("hobbyWorksList"); if(!wrap)return;
-  wrap.innerHTML="";
+  const longWrap=document.getElementById("hobbyLongWorksList");
+  const shortWrap=document.getElementById("hobbyShortWorksList");
+  if(!longWrap||!shortWrap)return;
+  longWrap.innerHTML=""; shortWrap.innerHTML="";
   const works=state.hobby?.works||[];
-  if(!works.length){ const p=document.createElement("p"); p.className="muted small"; p.textContent="作品がありません。「作品追加」から登録してください。"; wrap.appendChild(p); return; }
-  works.forEach((work,index)=>{
-    const card=document.createElement("article"); card.className="hobby-work-card";
-    const head=document.createElement("div"); head.className="section-head";
-    const title=document.createElement("h3"); title.textContent=work.title;
-    const actions=document.createElement("div"); actions.className="rule-actions";
-    const edit=document.createElement("button"); edit.type="button"; edit.className="edit-rule"; edit.textContent="変更"; edit.onclick=()=>editHobbyWork(work.id);
-    const del=document.createElement("button"); del.type="button"; del.className="delete-rule"; del.textContent="削除"; del.onclick=()=>deleteHobbyWork(work.id);
-    actions.append(edit,del); head.append(title,actions); card.appendChild(head);
-    const meta=document.createElement("div"); meta.className="hobby-work-meta"; meta.textContent=`目標 ${Number(work.goal).toLocaleString("ja-JP")}文字`;
-    card.appendChild(meta);
-    const label=document.createElement("label"); label.className="hobby-text-label"; label.textContent="本文";
-    const ta=document.createElement("textarea"); ta.rows=10; ta.placeholder=`${work.title} の本文を入力してください`; ta.value=work.text;
-    ta.addEventListener("input",()=>{work.text=ta.value; renderHobbyProgress(card,work);}); label.appendChild(ta); card.appendChild(label);
-    const actions2=document.createElement("div"); actions2.className="hobby-actions";
-    const save=document.createElement("button"); save.type="button"; save.className="parameter-save"; save.textContent="💾 保存"; save.onclick=()=>saveHobbyWorks();
-    const status=document.createElement("span"); status.className="muted small hobby-work-status"; actions2.append(save,status); card.appendChild(actions2);
-    const progressWrap=document.createElement("div"); progressWrap.className="hobby-work-progress"; card.appendChild(progressWrap);
-    renderHobbyProgress(card,work);
-    wrap.appendChild(card);
-  });
+  const groups={long:works.filter(w=>(w.type||"long")==="long"),short:works.filter(w=>w.type==="short")};
+  for(const [type,wrap] of Object.entries({long:longWrap,short:shortWrap})){
+    const list=groups[type];
+    if(!list.length){ const p=document.createElement("p"); p.className="muted small"; p.textContent=type==="long"?"長編作品がありません。":"短編作品がありません。"; wrap.appendChild(p); continue; }
+    list.forEach(work=>{
+      const card=document.createElement("article"); card.className="hobby-work-card";
+      const head=document.createElement("div"); head.className="section-head";
+      const title=document.createElement("h3"); title.textContent=work.title;
+      const actions=document.createElement("div"); actions.className="rule-actions";
+      const edit=document.createElement("button"); edit.type="button"; edit.className="edit-rule"; edit.textContent="変更"; edit.onclick=()=>editHobbyWork(work.id);
+      const del=document.createElement("button"); del.type="button"; del.className="delete-rule"; del.textContent="削除"; del.onclick=()=>deleteHobbyWork(work.id);
+      actions.append(edit,del); head.append(title,actions); card.appendChild(head);
+      const meta=document.createElement("div"); meta.className="hobby-work-meta"; meta.textContent=`目標 ${Number(work.goal).toLocaleString("ja-JP")}文字`;
+      card.appendChild(meta);
+      const label=document.createElement("label"); label.className="hobby-text-label"; label.textContent="本文";
+      const ta=document.createElement("textarea"); ta.rows=10; ta.placeholder=`${work.title} の本文を入力してください`; ta.value=work.text;
+      ta.addEventListener("input",()=>{work.text=ta.value; renderHobbyProgress(card,work);}); label.appendChild(ta); card.appendChild(label);
+      const actions2=document.createElement("div"); actions2.className="hobby-actions";
+      const save=document.createElement("button"); save.type="button"; save.className="parameter-save"; save.textContent="💾 保存"; save.onclick=()=>saveHobbyWorks();
+      const status=document.createElement("span"); status.className="muted small hobby-work-status"; actions2.append(save,status); card.appendChild(actions2);
+      const progressWrap=document.createElement("div"); progressWrap.className="hobby-work-progress"; card.appendChild(progressWrap);
+      renderHobbyProgress(card,work);
+      wrap.appendChild(card);
+    });
+  }
 }
+
 function renderHobbyProgress(card,work){
   const old=card.querySelector(".hobby-work-progress"); if(old) old.remove();
   const {count,percent}=dearMasterPercent(work.text,work.goal);
@@ -538,8 +545,8 @@ async function loadHobby(){
         for(const row of res.data||[]){
           try{
             const parsed=JSON.parse(row.text||"{}");
-            if(row.category===HOBBY_WORK_CATEGORY && parsed.title){ works.push({id:row.id,title:String(parsed.title),goal:Math.max(1,Number(parsed.goal)||DEAR_MASTER_GOAL),text:String(parsed.text||"")}); }
-            else if(row.category===HOBBY_CATEGORY && typeof parsed.dearMaster==="string" && !works.some(w=>w.id==="dear-master")){ works.unshift({id:"dear-master",title:"# Dear Master",goal:DEAR_MASTER_GOAL,text:parsed.dearMaster}); }
+            if(row.category===HOBBY_WORK_CATEGORY && parsed.title){ works.push({id:row.id,title:String(parsed.title),goal:Math.max(1,Number(parsed.goal)||DEAR_MASTER_GOAL),text:String(parsed.text||""),type:parsed.type==="short"?"short":"long"}); }
+            else if(row.category===HOBBY_CATEGORY && typeof parsed.dearMaster==="string" && !works.some(w=>w.id==="dear-master")){ works.unshift({id:"dear-master",title:"# Dear Master",goal:DEAR_MASTER_GOAL,text:parsed.dearMaster,type:"long"}); }
           }catch{}
         }
         if(works.length){ data={dearMaster:works.find(w=>w.id==="dear-master")?.text||"",works}; setLocalHobby(data); }
@@ -555,13 +562,13 @@ async function saveHobbyWorks(){
   if(supabaseReady&&user){
     try{
       for(const work of data.works){
-        if(String(work.id).startsWith("local-")){ const ins=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify({title:work.title,goal:work.goal,text:work.text}),category:HOBBY_WORK_CATEGORY}); if(!ins.error){work.id=ins.data?.[0]?.id||work.id;} }
+        if(String(work.id).startsWith("local-")){ const ins=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify({title:work.title,goal:work.goal,text:work.text,type:work.type||"long"}),category:HOBBY_WORK_CATEGORY}); if(!ins.error){work.id=ins.data?.[0]?.id||work.id;} }
         else if(work.id==="dear-master"){
           const existing=await supabaseClient.from("custom_rules").select("id").eq("user_id",user.id).eq("category",HOBBY_CATEGORY).limit(1);
           if(!existing.error&&existing.data?.length){ await supabaseClient.from("custom_rules").update({text:JSON.stringify({dearMaster:work.text})}).eq("id",existing.data[0].id).eq("user_id",user.id); }
           else if(!existing.error){ await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify({dearMaster:work.text}),category:HOBBY_CATEGORY}); }
         } else {
-          await supabaseClient.from("custom_rules").update({text:JSON.stringify({title:work.title,goal:work.goal,text:work.text}),category:HOBBY_WORK_CATEGORY}).eq("id",work.id).eq("user_id",user.id);
+          await supabaseClient.from("custom_rules").update({text:JSON.stringify({title:work.title,goal:work.goal,text:work.text,type:work.type||"long"}),category:HOBBY_WORK_CATEGORY}).eq("id",work.id).eq("user_id",user.id);
         }
       }
       cloudSaved=true;
@@ -572,10 +579,11 @@ async function saveHobbyWorks(){
 }
 async function addHobbyWork(){
   const title=document.getElementById("newHobbyTitle")?.value.trim();
+  const type=document.getElementById("newHobbyType")?.value==="short"?"short":"long";
   const goal=Math.max(1,Number(document.getElementById("newHobbyGoal")?.value||0));
   if(!title){alert("作品タイトルを入力してください。");return;}
   if(!goal){alert("目標文字数を入力してください。");return;}
-  const work={id:`local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,title,goal,text:""};
+  const work={id:`local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,title,goal,text:"",type};
   state.hobby.works.push(work); await saveHobbyWorks();
   document.getElementById("newHobbyTitle").value=""; document.getElementById("newHobbyGoal").value="";
 }
@@ -583,9 +591,11 @@ async function editHobbyWork(id){
   const work=state.hobby.works.find(w=>String(w.id)===String(id)); if(!work)return;
   const title=prompt("作品タイトルを変更してください。",work.title); if(title===null)return;
   const cleanTitle=title.trim(); if(!cleanTitle){alert("タイトルを空にはできません。");return;}
+  const typeInput=prompt("種類を変更してください。\nlong = 連載（長編）\nshort = 短編",work.type||"long"); if(typeInput===null)return;
+  const type=String(typeInput).toLowerCase()==="short"?"short":"long";
   const goalInput=prompt("目標文字数を変更してください。",String(work.goal)); if(goalInput===null)return;
   const goal=Math.max(1,Number(goalInput)); if(!Number.isFinite(goal)||goal<1){alert("目標文字数が正しくありません。");return;}
-  work.title=cleanTitle; work.goal=goal; await saveHobbyWorks();
+  work.title=cleanTitle; work.type=type; work.goal=goal; await saveHobbyWorks();
 }
 async function deleteHobbyWork(id){
   const idx=state.hobby.works.findIndex(w=>String(w.id)===String(id)); if(idx<0)return;

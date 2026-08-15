@@ -58,15 +58,23 @@
         <div class="section-head"><div><h2>🎨 趣味</h2><p class="muted">趣味の進捗を記録できます。</p></div><span class="muted small">連載</span></div>
       </section>
       <section class="card hobby-card">
-        <div class="section-head"><h2>📚 連載</h2><span class="muted small">作品ごとに管理できます。</span></div>
-        <div id="hobbyWorksList"></div>
-        <div class="hobby-add-work">
-          <div class="section-head"><h3>➕ 作品追加</h3><span class="muted small">タイトルと目標文字数を設定</span></div>
-          <div class="form hobby-work-add-form">
-            <input id="newHobbyTitle" placeholder="作品タイトル" maxlength="100">
-            <input id="newHobbyGoal" type="number" min="1" step="1" placeholder="目標文字数">
-            <button type="button" id="addHobbyWorkBtn">作品を追加</button>
-          </div>
+        <div class="section-head"><h2>📚 連載（長編）</h2><span class="muted small">作品ごとに管理できます。</span></div>
+        <div id="hobbyLongWorksList"></div>
+      </section>
+      <section class="card hobby-card">
+        <div class="section-head"><h2>📖 短編</h2><span class="muted small">長編と同じルールで管理できます。</span></div>
+        <div id="hobbyShortWorksList"></div>
+      </section>
+      <section class="card hobby-card">
+        <div class="section-head"><h2>➕ 作品追加</h2><span class="muted small">タイトル・種類・目標文字数を設定</span></div>
+        <div class="form hobby-work-add-form">
+          <input id="newHobbyTitle" placeholder="作品タイトル" maxlength="100">
+          <select id="newHobbyType">
+            <option value="long">📚 連載（長編）</option>
+            <option value="short">📖 短編</option>
+          </select>
+          <input id="newHobbyGoal" type="number" min="1" step="1" placeholder="目標文字数">
+          <button type="button" id="addHobbyWorkBtn">作品を追加</button>
         </div>
       </section>
     </div>
