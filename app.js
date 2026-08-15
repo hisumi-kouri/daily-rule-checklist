@@ -472,6 +472,7 @@ async function loadMurmurs(){
   }else state.murmurs=merged;
   state.murmurs.sort((a,b)=>{ const da=(b.date||"").localeCompare(a.date||""); return da!==0?da:(Number(b.createdAt||0)-Number(a.createdAt||0)); });
   renderMurmurs();
+  renderReport();
 }
 function renderMurmurs(){
   const list=document.getElementById("murmurList"), count=document.getElementById("murmurCount"), pager=document.getElementById("murmurPagination");
@@ -505,6 +506,7 @@ async function saveMurmur(){
   const item={id:`local-${Date.now()}`,date,mood:moodRaw===""?null:Number(moodRaw),text,createdAt:Date.now()};
   const local=getLocalMurmurs(); local.unshift(item); setLocalMurmurs(local);
   state.murmurs=[item,...(state.murmurs||[])]; state.murmurPage=1;
+  renderReport();
   let cloudSaved=false;
   if(supabaseReady&&user){
     try{ const payload={date,mood:item.mood,text}; const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify(payload),category:MURMUR_CATEGORY}).select("id,created_at").single();
@@ -520,8 +522,40 @@ async function deleteMurmur(id){
   if(!confirm("この呟きを削除しますか？"))return;
   const local=getLocalMurmurs().filter(x=>String(x.id)!==String(id)); setLocalMurmurs(local);
   if(supabaseReady&&user&&!String(id).startsWith("local-")){ try{await supabaseClient.from("custom_rules").delete().eq("id",id).eq("user_id",user.id).eq("category",MURMUR_CATEGORY);}catch{} }
-  state.murmurs=state.murmurs.filter(x=>String(x.id)!==String(id)); renderMurmurs();
+  state.murmurs=state.murmurs.filter(x=>String(x.id)!==String(id)); renderMurmurs(); renderReport();
 }
+function renderReport(){
+  const list=document.getElementById("reportList");
+  const empty=document.getElementById("reportEmpty");
+  const count=document.getElementById("reportCount");
+  if(!list||!empty||!count)return;
+  const items=(state.murmurs||[]).filter(x=>Number(x.mood)>=6);
+  count.textContent=`${items.length}件`;
+  list.innerHTML="";
+  empty.style.display=items.length?"none":"block";
+  items.forEach((item,index)=>{
+    const article=document.createElement("article"); article.className="report-entry";
+    const head=document.createElement("div"); head.className="report-entry-head";
+    const date=document.createElement("strong"); date.textContent=`${index+1}. ${item.date||"日付未設定"}`;
+    const mood=document.createElement("span"); mood.className="report-mood"; mood.textContent=`気分 ${item.mood}/10`;
+    head.append(date,mood);
+    const body=document.createElement("p"); body.className="report-entry-body"; body.textContent=item.text||"";
+    article.append(head,body); list.appendChild(article);
+  });
+}
+function printReport(){
+  const oldTitle=document.title;
+  document.title=`呟き報告書_${day()}`;
+  document.body.classList.add("printing-report");
+  switchAppTab("report");
+  setTimeout(()=>{window.print();document.body.classList.remove("printing-report");document.title=oldTitle;},50);
+}
+function initReport(){
+  document.getElementById("refreshReportBtn")?.addEventListener("click",renderReport);
+  document.getElementById("printReportBtn")?.addEventListener("click",printReport);
+  renderReport();
+}
+
 function initMurmurs(){
   const date=document.getElementById("murmurDate"); if(date)date.value=day();
   const mood=document.getElementById("murmurMood"); if(mood){ mood.innerHTML='<option value="">選択してください</option>'; for(let i=0;i<=10;i++){const o=document.createElement("option");o.value=String(i);o.textContent=`${i} / 10`;mood.appendChild(o);} }
@@ -1206,6 +1240,7 @@ function render(){
 const checksheetTab=document.getElementById("checksheetTab");
 const recordTab=document.getElementById("recordTab");
 const murmurTab=document.getElementById("murmurTab");
+const reportTab=document.getElementById("reportTab");
 const categoriesEl=document.getElementById("categories");
 const addRulesEl=document.querySelector("section.add");
 if(checksheetTab && categoriesEl && addRulesEl){
@@ -1217,6 +1252,7 @@ function switchAppTab(name){
   checksheetTab?.classList.toggle("active",name==="checksheet");
   recordTab?.classList.toggle("active",name==="record");
   murmurTab?.classList.toggle("active",name==="murmur");
+  reportTab?.classList.toggle("active",name==="report");
 }
 document.querySelectorAll(".app-tab").forEach(btn=>btn.addEventListener("click",()=>switchAppTab(btn.dataset.tab)));
 switchAppTab("record");
@@ -1234,6 +1270,7 @@ function refreshCategoryOptions(){
 document.getElementById("date").textContent=new Intl.DateTimeFormat("ja-JP",{dateStyle:"full"}).format(new Date());
 initUrgeChartTabs();
 initMurmurs();
+initReport();
 
 
 document.getElementById("addMedicationBtn").onclick=async()=>{
