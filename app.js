@@ -1450,7 +1450,7 @@ function render(){
     const div=document.createElement("div"); div.className="text"; div.textContent=item.text;
     if(item.source && item.text!=="頓服を飲んだ"){const src=document.createElement("small"); src.className="source"; src.textContent=`補足：${item.source}`; div.appendChild(src);}
     if(item.text==="頓服を飲んだ"){
-      const note=document.createElement("input"); note.type="text"; note.className="rule-inline-note"; note.placeholder="補足（任意）"; note.maxLength=300; note.value=item.source||"";
+      const note=document.createElement("textarea"); note.className="rule-inline-note"; note.rows=3; note.placeholder="補足（任意）"; note.maxLength=1000; note.value=item.source||"";
       note.onclick=e=>e.stopPropagation();
       note.onchange=async()=>{ await updateRuleSource(item.id.slice(2),note.value); };
       div.appendChild(note);

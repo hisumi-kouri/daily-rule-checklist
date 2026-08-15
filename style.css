@@ -53,7 +53,7 @@
 .add-rule-form{grid-template-columns:1.2fr 1fr 190px auto}.group-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:2px}.group-title h2{margin:0}.group-count{font-size:12px;color:#6b7280;background:#f3f4f6;border-radius:999px;padding:4px 8px}.rule-group{border-left:5px solid #6366f1}.other-group{border-left-color:#9ca3af}
 @media(max-width:700px){.add-rule-form{grid-template-columns:1fr}}
 
-.rule-inline-note{display:block;width:100%;max-width:420px;margin:6px 0 0 28px;padding:7px 9px;border:1px solid #d7dce5;border-radius:7px;font-size:12px;box-sizing:border-box}
+.rule-inline-note{display:block;width:100%;max-width:560px;min-height:84px;margin:8px 0 0 28px;padding:10px 12px;border:1px solid #d7dce5;border-radius:10px;font-size:13px;line-height:1.6;box-sizing:border-box;resize:vertical;background:#fffdf9}
 @media print{.rule-inline-note{border:0;padding:0;margin-left:28px}}
 
 /* v0.30: スタイリッシュ＋温かみのあるデザイン */
