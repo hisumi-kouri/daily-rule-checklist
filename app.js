@@ -7,7 +7,7 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 const base=[];
 
 let supabaseReady=false, user=null;
-let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:""}};
+let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
@@ -35,6 +35,7 @@ const DAILY_PARAMETER_CATEGORY="__daily_parameters__";
 const DAILY_MENTAL_CATEGORY="__daily_mental__";
 const MURMUR_CATEGORY="__murmur__";
 const HOBBY_CATEGORY="__hobby__";
+const HOBBY_WORK_CATEGORY="__hobby_work__";
 const DEAR_MASTER_GOAL=100000000;
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
 const URGE_TYPES=[
@@ -478,63 +479,123 @@ async function loadMurmurs(){
 }
 function getLocalHobby(){ try{return JSON.parse(localStorage.getItem("hobbyProgress")||"{}")||{};}catch{return {};} }
 function setLocalHobby(data){ localStorage.setItem("hobbyProgress",JSON.stringify(data)); }
-function dearMasterPercent(text){
+function dearMasterPercent(text,goal=DEAR_MASTER_GOAL){
   const count=Array.from(text||"").length;
-  return {count,percent:(count/DEAR_MASTER_GOAL)*100};
+  const safeGoal=Math.max(1,Number(goal)||DEAR_MASTER_GOAL);
+  return {count,percent:(count/safeGoal)*100};
+}
+function normalizeHobby(data){
+  const works=Array.isArray(data?.works)?data.works.map((w,i)=>({id:w.id||`local-${i}-${Date.now()}`,title:String(w.title||"作品"),goal:Math.max(1,Number(w.goal)||DEAR_MASTER_GOAL),text:String(w.text||"")})):[];
+  let legacy=typeof data?.dearMaster==="string"?data.dearMaster:"";
+  if(!works.length){
+    works.push({id:"dear-master",title:"# Dear Master",goal:DEAR_MASTER_GOAL,text:legacy});
+  }else if(legacy && !works.some(w=>w.id==="dear-master")){
+    works.unshift({id:"dear-master",title:"# Dear Master",goal:DEAR_MASTER_GOAL,text:legacy});
+  }
+  return {dearMaster:works.find(w=>w.id==="dear-master")?.text||"",works};
 }
 function renderHobby(){
-  const textEl=document.getElementById("dearMasterText");
-  const countEl=document.getElementById("dearMasterCount");
-  const pctEl=document.getElementById("dearMasterPercent");
-  const bar=document.getElementById("dearMasterBar");
-  if(!textEl||!countEl||!pctEl||!bar)return;
-  const text=state.hobby?.dearMaster||"";
-  if(document.activeElement!==textEl) textEl.value=text;
-  const {count,percent}=dearMasterPercent(text);
-  countEl.textContent=`${count.toLocaleString("ja-JP")} / ${DEAR_MASTER_GOAL.toLocaleString("ja-JP")}文字`;
-  pctEl.textContent=`${percent.toFixed(6)}%`;
-  bar.style.width=`${Math.min(percent,100)}%`;
+  const wrap=document.getElementById("hobbyWorksList"); if(!wrap)return;
+  wrap.innerHTML="";
+  const works=state.hobby?.works||[];
+  if(!works.length){ const p=document.createElement("p"); p.className="muted small"; p.textContent="作品がありません。「作品追加」から登録してください。"; wrap.appendChild(p); return; }
+  works.forEach((work,index)=>{
+    const card=document.createElement("article"); card.className="hobby-work-card";
+    const head=document.createElement("div"); head.className="section-head";
+    const title=document.createElement("h3"); title.textContent=work.title;
+    const actions=document.createElement("div"); actions.className="rule-actions";
+    const edit=document.createElement("button"); edit.type="button"; edit.className="edit-rule"; edit.textContent="変更"; edit.onclick=()=>editHobbyWork(work.id);
+    const del=document.createElement("button"); del.type="button"; del.className="delete-rule"; del.textContent="削除"; del.onclick=()=>deleteHobbyWork(work.id);
+    actions.append(edit,del); head.append(title,actions); card.appendChild(head);
+    const meta=document.createElement("div"); meta.className="hobby-work-meta"; meta.textContent=`目標 ${Number(work.goal).toLocaleString("ja-JP")}文字`;
+    card.appendChild(meta);
+    const label=document.createElement("label"); label.className="hobby-text-label"; label.textContent="本文";
+    const ta=document.createElement("textarea"); ta.rows=10; ta.placeholder=`${work.title} の本文を入力してください`; ta.value=work.text;
+    ta.addEventListener("input",()=>{work.text=ta.value; renderHobbyProgress(card,work);}); label.appendChild(ta); card.appendChild(label);
+    const actions2=document.createElement("div"); actions2.className="hobby-actions";
+    const save=document.createElement("button"); save.type="button"; save.className="parameter-save"; save.textContent="💾 保存"; save.onclick=()=>saveHobbyWorks();
+    const status=document.createElement("span"); status.className="muted small hobby-work-status"; actions2.append(save,status); card.appendChild(actions2);
+    const progressWrap=document.createElement("div"); progressWrap.className="hobby-work-progress"; card.appendChild(progressWrap);
+    renderHobbyProgress(card,work);
+    wrap.appendChild(card);
+  });
+}
+function renderHobbyProgress(card,work){
+  const old=card.querySelector(".hobby-work-progress"); if(old) old.remove();
+  const {count,percent}=dearMasterPercent(work.text,work.goal);
+  const box=document.createElement("div"); box.className="hobby-work-progress";
+  const head=document.createElement("div"); head.className="hobby-progress-head"; head.innerHTML=`<strong>${count.toLocaleString("ja-JP")} / ${Number(work.goal).toLocaleString("ja-JP")}文字</strong><span>${percent.toFixed(6)}%</span>`;
+  const track=document.createElement("div"); track.className="hobby-progress"; const bar=document.createElement("div"); bar.style.width=`${Math.min(percent,100)}%`; track.appendChild(bar);
+  box.append(head,track); card.appendChild(box);
 }
 async function loadHobby(){
-  let data=getLocalHobby();
+  let data=normalizeHobby(getLocalHobby());
   if(supabaseReady&&user){
     try{
-      const res=await supabaseClient.from("custom_rules").select("id,text,category,created_at").eq("user_id",user.id).eq("category",HOBBY_CATEGORY).order("created_at",{ascending:false}).limit(1);
+      const res=await supabaseClient.from("custom_rules").select("id,text,category,created_at").eq("user_id",user.id).in("category",[HOBBY_CATEGORY,HOBBY_WORK_CATEGORY]).order("created_at",{ascending:true});
       if(!res.error && res.data?.length){
-        try{ const parsed=JSON.parse(res.data[0].text||"{}"); if(typeof parsed.dearMaster==="string"){data={dearMaster:parsed.dearMaster}; setLocalHobby(data);} }catch{}
+        const works=[];
+        for(const row of res.data||[]){
+          try{
+            const parsed=JSON.parse(row.text||"{}");
+            if(row.category===HOBBY_WORK_CATEGORY && parsed.title){ works.push({id:row.id,title:String(parsed.title),goal:Math.max(1,Number(parsed.goal)||DEAR_MASTER_GOAL),text:String(parsed.text||"")}); }
+            else if(row.category===HOBBY_CATEGORY && typeof parsed.dearMaster==="string" && !works.some(w=>w.id==="dear-master")){ works.unshift({id:"dear-master",title:"# Dear Master",goal:DEAR_MASTER_GOAL,text:parsed.dearMaster}); }
+          }catch{}
+        }
+        if(works.length){ data={dearMaster:works.find(w=>w.id==="dear-master")?.text||"",works}; setLocalHobby(data); }
       }
     }catch{}
   }
-  state.hobby={dearMaster:typeof data.dearMaster==="string"?data.dearMaster:""};
-  renderHobby();
+  state.hobby=normalizeHobby(data); renderHobby();
 }
-async function saveHobby(){
-  const text=document.getElementById("dearMasterText")?.value||"";
-  state.hobby={dearMaster:text};
-  setLocalHobby(state.hobby);
+async function saveHobbyWorks(){
+  const data={dearMaster:state.hobby?.works?.find(w=>w.id==="dear-master")?.text||"",works:state.hobby?.works||[]};
+  state.hobby=data; setLocalHobby(data);
   let cloudSaved=false;
   if(supabaseReady&&user){
     try{
-      const existing=await supabaseClient.from("custom_rules").select("id").eq("user_id",user.id).eq("category",HOBBY_CATEGORY).limit(1);
-      if(!existing.error&&existing.data?.length){
-        const res=await supabaseClient.from("custom_rules").update({text:JSON.stringify({dearMaster:text})}).eq("id",existing.data[0].id).eq("user_id",user.id);
-        cloudSaved=!res.error;
-      }else if(!existing.error){
-        const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify({dearMaster:text}),category:HOBBY_CATEGORY});
-        cloudSaved=!res.error;
+      for(const work of data.works){
+        if(String(work.id).startsWith("local-")){ const ins=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify({title:work.title,goal:work.goal,text:work.text}),category:HOBBY_WORK_CATEGORY}); if(!ins.error){work.id=ins.data?.[0]?.id||work.id;} }
+        else if(work.id==="dear-master"){
+          const existing=await supabaseClient.from("custom_rules").select("id").eq("user_id",user.id).eq("category",HOBBY_CATEGORY).limit(1);
+          if(!existing.error&&existing.data?.length){ await supabaseClient.from("custom_rules").update({text:JSON.stringify({dearMaster:work.text})}).eq("id",existing.data[0].id).eq("user_id",user.id); }
+          else if(!existing.error){ await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify({dearMaster:work.text}),category:HOBBY_CATEGORY}); }
+        } else {
+          await supabaseClient.from("custom_rules").update({text:JSON.stringify({title:work.title,goal:work.goal,text:work.text}),category:HOBBY_WORK_CATEGORY}).eq("id",work.id).eq("user_id",user.id);
+        }
       }
+      cloudSaved=true;
     }catch{}
   }
   renderHobby();
-  const status=document.getElementById("dearMasterStatus");
-  if(status)status.textContent=cloudSaved?"☁️ 保存しました":"💾 この端末に保存しました";
+  document.querySelectorAll(".hobby-work-status").forEach(el=>el.textContent=cloudSaved?"☁️ 保存しました":"💾 この端末に保存しました");
+}
+async function addHobbyWork(){
+  const title=document.getElementById("newHobbyTitle")?.value.trim();
+  const goal=Math.max(1,Number(document.getElementById("newHobbyGoal")?.value||0));
+  if(!title){alert("作品タイトルを入力してください。");return;}
+  if(!goal){alert("目標文字数を入力してください。");return;}
+  const work={id:`local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,title,goal,text:""};
+  state.hobby.works.push(work); await saveHobbyWorks();
+  document.getElementById("newHobbyTitle").value=""; document.getElementById("newHobbyGoal").value="";
+}
+async function editHobbyWork(id){
+  const work=state.hobby.works.find(w=>String(w.id)===String(id)); if(!work)return;
+  const title=prompt("作品タイトルを変更してください。",work.title); if(title===null)return;
+  const cleanTitle=title.trim(); if(!cleanTitle){alert("タイトルを空にはできません。");return;}
+  const goalInput=prompt("目標文字数を変更してください。",String(work.goal)); if(goalInput===null)return;
+  const goal=Math.max(1,Number(goalInput)); if(!Number.isFinite(goal)||goal<1){alert("目標文字数が正しくありません。");return;}
+  work.title=cleanTitle; work.goal=goal; await saveHobbyWorks();
+}
+async function deleteHobbyWork(id){
+  const idx=state.hobby.works.findIndex(w=>String(w.id)===String(id)); if(idx<0)return;
+  const work=state.hobby.works[idx]; if(!confirm(`「${work.title}」を削除しますか？`))return;
+  if(supabaseReady&&user && !String(work.id).startsWith("local-") && work.id!=="dear-master"){ try{ await supabaseClient.from("custom_rules").delete().eq("id",work.id).eq("user_id",user.id); }catch{} }
+  if(work.id==="dear-master" && supabaseReady&&user){ try{ await supabaseClient.from("custom_rules").delete().eq("user_id",user.id).eq("category",HOBBY_CATEGORY); }catch{} }
+  state.hobby.works.splice(idx,1); setLocalHobby({dearMaster:state.hobby.works.find(w=>w.id==="dear-master")?.text||"",works:state.hobby.works}); renderHobby();
 }
 function initHobby(){
-  const text=document.getElementById("dearMasterText");
-  const btn=document.getElementById("saveDearMasterBtn");
-  text?.addEventListener("input",()=>{state.hobby={dearMaster:text.value};renderHobby();});
-  btn?.addEventListener("click",saveHobby);
-  renderHobby();
+  const btn=document.getElementById("addHobbyWorkBtn"); btn?.addEventListener("click",addHobbyWork); renderHobby();
 }
 
 function renderMurmurs(){

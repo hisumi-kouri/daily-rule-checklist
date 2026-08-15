@@ -58,17 +58,16 @@
         <div class="section-head"><div><h2>🎨 趣味</h2><p class="muted">趣味の進捗を記録できます。</p></div><span class="muted small">連載</span></div>
       </section>
       <section class="card hobby-card">
-        <div class="section-head"><h2>📚 連載</h2><span class="muted small">目標 100,000,000文字</span></div>
-        <label class="hobby-text-label"># Dear Master
-          <textarea id="dearMasterText" rows="12" placeholder="# Dear Master の本文を入力してください"></textarea>
-        </label>
-        <div class="hobby-actions">
-          <button type="button" id="saveDearMasterBtn" class="parameter-save">💾 保存</button>
-          <span id="dearMasterStatus" class="muted small"></span>
+        <div class="section-head"><h2>📚 連載</h2><span class="muted small">作品ごとに管理できます。</span></div>
+        <div id="hobbyWorksList"></div>
+        <div class="hobby-add-work">
+          <div class="section-head"><h3>➕ 作品追加</h3><span class="muted small">タイトルと目標文字数を設定</span></div>
+          <div class="form hobby-work-add-form">
+            <input id="newHobbyTitle" placeholder="作品タイトル" maxlength="100">
+            <input id="newHobbyGoal" type="number" min="1" step="1" placeholder="目標文字数">
+            <button type="button" id="addHobbyWorkBtn">作品を追加</button>
+          </div>
         </div>
-        <div class="hobby-progress-head"><strong id="dearMasterCount">0 / 100,000,000文字</strong><span id="dearMasterPercent">0.000000%</span></div>
-        <div class="hobby-progress"><div id="dearMasterBar"></div></div>
-        <p class="muted small">文字数は入力した本文を1文字ずつ数えて、100,000,000文字に対する達成率を表示します。</p>
       </section>
     </div>
     <div id="reportTab" class="tab-panel">
