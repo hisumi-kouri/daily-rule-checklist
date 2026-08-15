@@ -7,7 +7,7 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 const base=[];
 
 let supabaseReady=false, user=null;
-let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1};
+let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:""}};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
@@ -34,6 +34,8 @@ const MEDICATION_CATEGORY="__medication__";
 const DAILY_PARAMETER_CATEGORY="__daily_parameters__";
 const DAILY_MENTAL_CATEGORY="__daily_mental__";
 const MURMUR_CATEGORY="__murmur__";
+const HOBBY_CATEGORY="__hobby__";
+const DEAR_MASTER_GOAL=100000000;
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
 const URGE_TYPES=[
   {id:"vanish",label:"消えたい衝動"},
@@ -474,6 +476,67 @@ async function loadMurmurs(){
   renderMurmurs();
   renderReport();
 }
+function getLocalHobby(){ try{return JSON.parse(localStorage.getItem("hobbyProgress")||"{}")||{};}catch{return {};} }
+function setLocalHobby(data){ localStorage.setItem("hobbyProgress",JSON.stringify(data)); }
+function dearMasterPercent(text){
+  const count=Array.from(text||"").length;
+  return {count,percent:(count/DEAR_MASTER_GOAL)*100};
+}
+function renderHobby(){
+  const textEl=document.getElementById("dearMasterText");
+  const countEl=document.getElementById("dearMasterCount");
+  const pctEl=document.getElementById("dearMasterPercent");
+  const bar=document.getElementById("dearMasterBar");
+  if(!textEl||!countEl||!pctEl||!bar)return;
+  const text=state.hobby?.dearMaster||"";
+  if(document.activeElement!==textEl) textEl.value=text;
+  const {count,percent}=dearMasterPercent(text);
+  countEl.textContent=`${count.toLocaleString("ja-JP")} / ${DEAR_MASTER_GOAL.toLocaleString("ja-JP")}文字`;
+  pctEl.textContent=`${percent.toFixed(6)}%`;
+  bar.style.width=`${Math.min(percent,100)}%`;
+}
+async function loadHobby(){
+  let data=getLocalHobby();
+  if(supabaseReady&&user){
+    try{
+      const res=await supabaseClient.from("custom_rules").select("id,text,category,created_at").eq("user_id",user.id).eq("category",HOBBY_CATEGORY).order("created_at",{ascending:false}).limit(1);
+      if(!res.error && res.data?.length){
+        try{ const parsed=JSON.parse(res.data[0].text||"{}"); if(typeof parsed.dearMaster==="string"){data={dearMaster:parsed.dearMaster}; setLocalHobby(data);} }catch{}
+      }
+    }catch{}
+  }
+  state.hobby={dearMaster:typeof data.dearMaster==="string"?data.dearMaster:""};
+  renderHobby();
+}
+async function saveHobby(){
+  const text=document.getElementById("dearMasterText")?.value||"";
+  state.hobby={dearMaster:text};
+  setLocalHobby(state.hobby);
+  let cloudSaved=false;
+  if(supabaseReady&&user){
+    try{
+      const existing=await supabaseClient.from("custom_rules").select("id").eq("user_id",user.id).eq("category",HOBBY_CATEGORY).limit(1);
+      if(!existing.error&&existing.data?.length){
+        const res=await supabaseClient.from("custom_rules").update({text:JSON.stringify({dearMaster:text})}).eq("id",existing.data[0].id).eq("user_id",user.id);
+        cloudSaved=!res.error;
+      }else if(!existing.error){
+        const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify({dearMaster:text}),category:HOBBY_CATEGORY});
+        cloudSaved=!res.error;
+      }
+    }catch{}
+  }
+  renderHobby();
+  const status=document.getElementById("dearMasterStatus");
+  if(status)status.textContent=cloudSaved?"☁️ 保存しました":"💾 この端末に保存しました";
+}
+function initHobby(){
+  const text=document.getElementById("dearMasterText");
+  const btn=document.getElementById("saveDearMasterBtn");
+  text?.addEventListener("input",()=>{state.hobby={dearMaster:text.value};renderHobby();});
+  btn?.addEventListener("click",saveHobby);
+  renderHobby();
+}
+
 function renderMurmurs(){
   const list=document.getElementById("murmurList"), count=document.getElementById("murmurCount"), pager=document.getElementById("murmurPagination");
   if(!list||!count||!pager)return;
@@ -1241,6 +1304,7 @@ const checksheetTab=document.getElementById("checksheetTab");
 const recordTab=document.getElementById("recordTab");
 const murmurTab=document.getElementById("murmurTab");
 const reportTab=document.getElementById("reportTab");
+const hobbyTab=document.getElementById("hobbyTab");
 const categoriesEl=document.getElementById("categories");
 const addRulesEl=document.querySelector("section.add");
 if(checksheetTab && categoriesEl && addRulesEl){
@@ -1253,6 +1317,7 @@ function switchAppTab(name){
   recordTab?.classList.toggle("active",name==="record");
   murmurTab?.classList.toggle("active",name==="murmur");
   reportTab?.classList.toggle("active",name==="report");
+  hobbyTab?.classList.toggle("active",name==="hobby");
 }
 document.querySelectorAll(".app-tab").forEach(btn=>btn.addEventListener("click",()=>switchAppTab(btn.dataset.tab)));
 switchAppTab("record");
@@ -1271,6 +1336,8 @@ document.getElementById("date").textContent=new Intl.DateTimeFormat("ja-JP",{dat
 initUrgeChartTabs();
 initMurmurs();
 initReport();
+initHobby();
+loadHobby();
 
 
 document.getElementById("addMedicationBtn").onclick=async()=>{
