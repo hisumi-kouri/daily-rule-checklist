@@ -1541,6 +1541,7 @@ function refreshCategoryOptions(){
   const unique=[...new Set(names)].filter(x=>x && !["__custom__","__system__","__priority__","__medication__","__daily_parameters__","__daily_mental__"].includes(x));
   select.innerHTML=unique.map(x=>`<option value="${x.replaceAll('"','&quot;')}">${x}</option>`).join("")+`<option value="__custom__">✏️ 自由入力</option>`;
   if([...select.options].some(o=>o.value===current)) select.value=current;
+  syncCategoryCustomInput(false);
 }
 
 document.getElementById("date").textContent=new Intl.DateTimeFormat("ja-JP",{dateStyle:"full"}).format(new Date());
@@ -1575,11 +1576,16 @@ document.getElementById("addPriorityBtn").onclick=async()=>{
 
 const categorySelect=document.getElementById("newCategory");
 const categoryCustom=document.getElementById("newCategoryCustom");
-categorySelect.onchange=()=>{
+function syncCategoryCustomInput(focus=false){
+  if(!categorySelect||!categoryCustom)return;
   const custom=categorySelect.value==="__custom__";
   categoryCustom.style.display=custom?"block":"none";
-  if(custom) categoryCustom.focus();
-};
+  categoryCustom.disabled=!custom;
+  categoryCustom.setAttribute("aria-hidden",custom?"false":"true");
+  if(custom && focus) setTimeout(()=>categoryCustom.focus(),0);
+}
+categorySelect.onchange=()=>syncCategoryCustomInput(true);
+syncCategoryCustomInput(false);
 categoryCustom.addEventListener("keydown",e=>{
   if(e.key==="Enter") document.getElementById("addBtn").click();
 });
