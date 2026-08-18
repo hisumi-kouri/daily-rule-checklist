@@ -634,8 +634,8 @@ function initHobby(){
 function getLocalWatching(){ try{return JSON.parse(localStorage.getItem("watchingWorks")||"[]")||[];}catch{return [];} }
 function setLocalWatching(data){ localStorage.setItem("watchingWorks",JSON.stringify(data)); }
 function parseWatchingRow(row){
-  try{const d=JSON.parse(row.text||"{}"); return {id:row.id,title:String(d.title||"作品"),type:d.type||"movie",date:d.date||"",comment:String(d.comment||"")};}
-  catch{return {id:row.id,title:row.text||"作品",type:"movie",date:"",comment:""};}
+  try{const d=JSON.parse(row.text||"{}"); return {id:row.id,title:String(d.title||"作品"),type:d.type||"movie",genre:String(d.genre||"映画"),date:d.date||"",comment:String(d.comment||"")};}
+  catch{return {id:row.id,title:row.text||"作品",type:"movie",genre:"映画",date:"",comment:""};}
 }
 async function loadWatching(){
   let data=getLocalWatching();
@@ -656,9 +656,9 @@ function renderWatching(){
     const row=document.createElement("article"); row.className="watching-item";
     const top=document.createElement("div"); top.className="watching-item-top";
     const title=document.createElement("h3"); title.textContent=item.title;
-    const badge=document.createElement("span"); badge.className="watching-badge"; badge.textContent=item.type==="drama"?"📺 ドラマ":"🎬 映画";
+    const badge=document.createElement("span"); badge.className="watching-badge"; badge.textContent=`${item.type==="drama"?"📺 ドラマ":"🎬 映画"}・${item.genre||"映画"}`;
     top.append(title,badge); row.appendChild(top);
-    const meta=document.createElement("div"); meta.className="watching-meta"; meta.textContent=`鑑賞日：${item.date?item.date.replaceAll("-","/"):"未入力"}`; row.appendChild(meta);
+    const meta=document.createElement("div"); meta.className="watching-meta"; meta.textContent=`ジャンル：${item.genre||"映画"}　｜　鑑賞日：${item.date?item.date.replaceAll("-","/"):"未入力"}`; row.appendChild(meta);
     const comment=document.createElement("p"); comment.className="watching-comment"; comment.textContent=item.comment||"コメントなし"; row.appendChild(comment);
     const actions=document.createElement("div"); actions.className="rule-actions watching-actions";
     const edit=document.createElement("button"); edit.type="button"; edit.className="edit-rule"; edit.textContent="変更"; edit.onclick=()=>editWatching(item.id);
@@ -668,7 +668,7 @@ function renderWatching(){
 }
 async function saveWatchingCloud(item){
   if(!supabaseReady||!user)return true;
-  const payload=JSON.stringify({title:item.title,type:item.type,date:item.date,comment:item.comment});
+  const payload=JSON.stringify({title:item.title,type:item.type,genre:item.genre||"映画",date:item.date,comment:item.comment});
   if(String(item.id).startsWith("watching-local-")){
     const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:payload,category:WATCHING_CATEGORY}).select("id").single();
     if(res.error) return false; item.id=res.data.id; return true;
@@ -678,10 +678,11 @@ async function saveWatchingCloud(item){
 async function addWatching(){
   const title=document.getElementById("newWatchingTitle")?.value.trim()||"";
   const type=document.getElementById("newWatchingType")?.value||"movie";
+  const genre=document.getElementById("newWatchingGenre")?.value||"映画";
   const date=document.getElementById("newWatchingDate")?.value||day();
   const comment=document.getElementById("newWatchingComment")?.value.trim()||"";
   if(!title){alert("作品名を入力してください。");return;}
-  const item={id:`watching-local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,title,type,date,comment};
+  const item={id:`watching-local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,title,type,genre,date,comment};
   state.watching.push(item); setLocalWatching(state.watching); const ok=await saveWatchingCloud(item); if(!ok)console.warn("鑑賞作品のクラウド保存に失敗しました");
   setLocalWatching(state.watching); renderWatching();
   ["newWatchingTitle","newWatchingComment"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
@@ -690,9 +691,10 @@ async function addWatching(){
 async function editWatching(id){
   const item=state.watching.find(x=>String(x.id)===String(id)); if(!item)return;
   const title=prompt("作品名を変更してください。",item.title); if(title===null)return;
+  const genre=prompt("ジャンルを入力してください。\n映画 / ドラマ / アニメ / その他",item.genre||"映画"); if(genre===null)return;
   const date=prompt("鑑賞日をYYYY-MM-DDで入力してください。",item.date||day()); if(date===null)return;
   const comment=prompt("コメントを変更してください。",item.comment||""); if(comment===null)return;
-  item.title=title.trim()||item.title; item.date=date.trim(); item.comment=comment;
+  item.title=title.trim()||item.title; item.genre=genre.trim()||"映画"; item.date=date.trim(); item.comment=comment;
   const ok=await saveWatchingCloud(item); setLocalWatching(state.watching); renderWatching(); if(!ok)alert("クラウドへの変更保存に失敗しました。端末には保存されています。");
 }
 async function deleteWatching(id){
@@ -1249,68 +1251,108 @@ function renderUrgeChart(points){
   const chart=document.getElementById("urgeChart");
   if(!chart)return;
   chart.innerHTML="";
-  const showEvery=points.length>10?5:1;
-  for(let i=0;i<points.length;i++){
-    const point=points[i]||{};
-    const col=document.createElement("div"); col.className="urge-chart-col";
-    const bars=document.createElement("div"); bars.className="urge-bars";
-    URGE_TYPES.forEach(type=>{
-      const raw=point[type.id];
-      const n=(raw===null||raw===undefined||raw==="")?null:Number(raw);
-      const bar=document.createElement("div");
-      bar.className=`urge-bar ${type.id}-bar`;
-      bar.style.height=n!==null && Number.isFinite(n)?`${Math.max(0,Math.min(10,n))*10}%`:'2%';
-      bar.title=`${type.label}: ${n===null?'未記録':n+' / 10'}`;
-      if(n===null) bar.classList.add("unrecorded");
-      bars.appendChild(bar);
-    });
-    const label=document.createElement("span"); label.className="urge-chart-label"; label.textContent=(i%showEvery===0||i===points.length-1)?shortDate(point.date):"";
-    col.append(bars,label); chart.appendChild(col);
+  const width=Math.max(760, points.length*72), height=260;
+  const pad={l:34,r:12,t:18,b:38};
+  const innerW=width-pad.l-pad.r, innerH=height-pad.t-pad.b;
+  const ns="http://www.w3.org/2000/svg";
+  const svg=document.createElementNS(ns,"svg");
+  svg.setAttribute("viewBox",`0 0 ${width} ${height}`); svg.setAttribute("width","100%"); svg.setAttribute("height",String(height));
+  svg.setAttribute("role","img"); svg.setAttribute("aria-label","心の状態6パラメーターの推移");
+
+  for(let level=0; level<=10; level+=2){
+    const y=pad.t+(10-level)/10*innerH;
+    const line=document.createElementNS(ns,"line"); line.setAttribute("x1",pad.l); line.setAttribute("x2",width-pad.r); line.setAttribute("y1",y); line.setAttribute("y2",y); line.setAttribute("stroke","#e5e7eb"); line.setAttribute("stroke-width","1"); svg.appendChild(line);
+    const txt=document.createElementNS(ns,"text"); txt.setAttribute("x",pad.l-8); txt.setAttribute("y",y+4); txt.setAttribute("text-anchor","end"); txt.setAttribute("font-size","10"); txt.setAttribute("fill","#6b7280"); txt.textContent=String(level); svg.appendChild(txt);
   }
+
+  const palette={vanish:"#b57499",die:"#b85d61",mood:"#4f46e5",anxiety:"#0f766e",irritability:"#d97706",fatigue:"#64748b"};
+  URGE_TYPES.forEach(type=>{
+    const pts=[];
+    points.forEach((point,i)=>{
+      const n=point[type.id];
+      if(n===null||n===undefined||n===""||!Number.isFinite(Number(n))) return;
+      const x=points.length===1?pad.l+innerW/2:pad.l+(i/(points.length-1))*innerW;
+      const y=pad.t+(10-Number(n))/10*innerH;
+      pts.push({x,y,n:Number(n)});
+    });
+    if(!pts.length)return;
+    const path=document.createElementNS(ns,"path");
+    path.setAttribute("d",pts.map((p,i)=>(i?"L":"M")+`${p.x},${p.y}`).join(" "));
+    path.setAttribute("fill","none"); path.setAttribute("stroke",palette[type.id]); path.setAttribute("stroke-width","3"); path.setAttribute("stroke-linecap","round"); path.setAttribute("stroke-linejoin","round"); svg.appendChild(path);
+    pts.forEach(p=>{
+      const c=document.createElementNS(ns,"circle"); c.setAttribute("cx",p.x); c.setAttribute("cy",p.y); c.setAttribute("r","4"); c.setAttribute("fill",palette[type.id]); c.setAttribute("stroke","white"); c.setAttribute("stroke-width","2");
+      const title=document.createElementNS(ns,"title"); title.textContent=`${type.label}: ${p.n}/10`; c.appendChild(title); svg.appendChild(c);
+    });
+  });
+
+  const showEvery=points.length>10?5:1;
+  points.forEach((point,i)=>{
+    if(!(i%showEvery===0||i===points.length-1))return;
+    const x=points.length===1?pad.l+innerW/2:pad.l+(i/(points.length-1))*innerW;
+    const txt=document.createElementNS(ns,"text"); txt.setAttribute("x",x); txt.setAttribute("y",height-12); txt.setAttribute("text-anchor","middle"); txt.setAttribute("font-size","10"); txt.setAttribute("fill","#6b7280"); txt.textContent=shortDate(point.date); svg.appendChild(txt);
+  });
+  chart.appendChild(svg);
 }
 
 function renderParameterTrend(points){
   const chart=document.getElementById("parameterTrendChart");
   if(!chart)return;
   chart.innerHTML="";
-  const maxSleep=24;
-  const maxSymptoms=5;
-  const showEvery=points.length>10?5:1;
-  for(let i=0;i<points.length;i++){
-    const p=points[i];
-    const col=document.createElement("div"); col.className="parameter-trend-col";
-    const bars=document.createElement("div"); bars.className="parameter-trend-bars";
-    const sleep=document.createElement("div"); sleep.className="parameter-bar sleep-bar"; sleep.style.height=`${Math.max((Number(p.sleep)||0)/maxSleep*100,2)}%`; sleep.title=`睡眠 ${p.sleep==null?"未記録":p.sleep+"時間"}`;
-    const symptoms=document.createElement("div"); symptoms.className="parameter-bar symptom-bar"; symptoms.style.height=`${Math.max((Number(p.symptoms)||0)/maxSymptoms*100,2)}%`; symptoms.title=`症状 ${p.symptoms??0}項目`;
-    bars.append(sleep,symptoms);
-    const label=document.createElement("span"); label.className="parameter-trend-label"; label.textContent=(i%showEvery===0||i===points.length-1)?shortDate(p.date):"";
-    col.append(bars,label); chart.appendChild(col);
-  }
+  const wrap=document.createElement("div"); wrap.className="parameter-trend-table";
+  const headers=["日付","睡眠","幻視","幻聴","幻触","被害妄想","その他の幻覚"];
+  const thead=document.createElement("div"); thead.className="parameter-trend-row parameter-trend-header";
+  headers.forEach(h=>{const el=document.createElement("span"); el.textContent=h; thead.appendChild(el);}); wrap.appendChild(thead);
+  points.forEach(p=>{
+    const row=document.createElement("div"); row.className="parameter-trend-row";
+    const cells=[shortDate(p.date),p.sleep==null?"—":`${p.sleep}h`,p.visual?"✓":"—",p.auditory?"✓":"—",p.tactile?"✓":"—",p.delusion?"✓":"—",p.other?"✓":"—"];
+    cells.forEach(c=>{const el=document.createElement("span"); el.textContent=c; row.appendChild(el);});
+    wrap.appendChild(row);
+  });
+  chart.appendChild(wrap);
 }
+
 async function loadParameterTrendHistory(days=urgeChartDays){
   const chart=document.getElementById("parameterTrendChart"); if(!chart)return;
   const dates=Array.from({length:days},(_,i)=>dateOffset(i-days+1));
-  const empty=dates.map(date=>({date,sleep:null,symptoms:0}));
-  if(!supabaseReady||!user){
-    const today=state.parameters||{};
-    const point=empty[empty.length-1];
-    if(today.sleepHours!=="")point.sleep=Number(today.sleepHours);
-    point.symptoms=(today.hallucinations||[]).length;
-    renderParameterTrend(empty); return;
-  }
-  const {data,error}=await supabaseClient.from("custom_rules").select("id,text,category")
-    .eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY).order("created_at");
-  if(error){console.error(error);return;}
+  const blank=()=>({sleep:null,visual:false,auditory:false,tactile:false,delusion:false,other:false});
   const byDate={};
-  for(const row of data||[]){
-    try{
-      const d=JSON.parse(row.text||"{}");
-      if(!dates.includes(d.date))continue;
-      byDate[d.date]={date:d.date,sleep:d.sleepHours===""||d.sleepHours==null?null:Number(d.sleepHours),symptoms:Array.isArray(d.hallucinations)?d.hallucinations.length:0};
-    }catch{}
+  for(const date of dates){
+    const raw=localStorage.getItem(`dailyParameters:${date}`);
+    if(raw){try{byDate[date]={...blank(),...JSON.parse(raw)}}catch{}}
   }
-  const points=dates.map(date=>byDate[date]||{date,sleep:null,symptoms:0});
-  renderParameterTrend(points);
+  const today=day();
+  if(!byDate[today] && state.parameters){
+    byDate[today]={
+      ...blank(),
+      sleep:state.parameters.sleepHours===""?null:Number(state.parameters.sleepHours),
+      visual:(state.parameters.hallucinations||[]).includes("幻視"),
+      auditory:(state.parameters.hallucinations||[]).includes("幻聴"),
+      tactile:(state.parameters.hallucinations||[]).includes("幻触"),
+      delusion:(state.parameters.hallucinations||[]).includes("被害妄想"),
+      other:(state.parameters.hallucinations||[]).includes("幻覚")
+    };
+  }
+  if(supabaseReady&&user){
+    const {data,error}=await supabaseClient.from("custom_rules").select("id,text,category").eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY).order("created_at");
+    if(!error){
+      for(const row of data||[]){
+        try{
+          const d=JSON.parse(row.text||"{}");
+          if(!d.date||!dates.includes(d.date))continue;
+          byDate[d.date]={
+            ...blank(),
+            sleep:d.sleepHours===""||d.sleepHours==null?null:Number(d.sleepHours),
+            visual:(d.hallucinations||[]).includes("幻視"),
+            auditory:(d.hallucinations||[]).includes("幻聴"),
+            tactile:(d.hallucinations||[]).includes("幻触"),
+            delusion:(d.hallucinations||[]).includes("被害妄想"),
+            other:(d.hallucinations||[]).includes("幻覚")
+          };
+        }catch{}
+      }
+    }
+  }
+  renderParameterTrend(dates.map(date=>({date,...(byDate[date]||blank())})));
 }
 
 async function loadUrgeHistory(days=urgeChartDays){
