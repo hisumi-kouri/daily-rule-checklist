@@ -29,7 +29,7 @@ const base=[];
 
 let supabaseReady=false, user=null;
 let supabaseOffline=false;
-let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}, reading:[]};
+let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}, reading:[], watching:[]};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
@@ -59,6 +59,7 @@ const MURMUR_CATEGORY="__murmur__";
 const HOBBY_CATEGORY="__hobby__";
 const HOBBY_WORK_CATEGORY="__hobby_work__";
 const READING_CATEGORY="__reading__";
+const WATCHING_CATEGORY="__watching__";
 const DEAR_MASTER_GOAL=100000000;
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
 const URGE_TYPES=[
@@ -630,6 +631,81 @@ function initHobby(){
   const btn=document.getElementById("addHobbyWorkBtn"); btn?.addEventListener("click",addHobbyWork); renderHobby();
 }
 
+function getLocalWatching(){ try{return JSON.parse(localStorage.getItem("watchingWorks")||"[]")||[];}catch{return [];} }
+function setLocalWatching(data){ localStorage.setItem("watchingWorks",JSON.stringify(data)); }
+function parseWatchingRow(row){
+  try{const d=JSON.parse(row.text||"{}"); return {id:row.id,title:String(d.title||"作品"),type:d.type||"movie",date:d.date||"",comment:String(d.comment||"")};}
+  catch{return {id:row.id,title:row.text||"作品",type:"movie",date:"",comment:""};}
+}
+async function loadWatching(){
+  let data=getLocalWatching();
+  if(supabaseReady&&user){
+    try{
+      const res=await supabaseClient.from("custom_rules").select("id,text,category,created_at").eq("user_id",user.id).eq("category",WATCHING_CATEGORY).order("created_at",{ascending:true});
+      if(!res.error) data=(res.data||[]).map(parseWatchingRow);
+    }catch(e){console.warn("鑑賞データ取得失敗",e);}
+  }
+  state.watching=data; setLocalWatching(data); renderWatching();
+}
+function renderWatching(){
+  const list=document.getElementById("watchingList"),count=document.getElementById("watchingCount");
+  if(!list||!count)return;
+  const items=state.watching||[]; count.textContent=`${items.length}作品`; list.innerHTML="";
+  if(!items.length){const e=document.createElement("p");e.className="muted small";e.textContent="まだ鑑賞作品がありません。";list.appendChild(e);return;}
+  items.forEach(item=>{
+    const row=document.createElement("article"); row.className="watching-item";
+    const top=document.createElement("div"); top.className="watching-item-top";
+    const title=document.createElement("h3"); title.textContent=item.title;
+    const badge=document.createElement("span"); badge.className="watching-badge"; badge.textContent=item.type==="drama"?"📺 ドラマ":"🎬 映画";
+    top.append(title,badge); row.appendChild(top);
+    const meta=document.createElement("div"); meta.className="watching-meta"; meta.textContent=`鑑賞日：${item.date?item.date.replaceAll("-","/"):"未入力"}`; row.appendChild(meta);
+    const comment=document.createElement("p"); comment.className="watching-comment"; comment.textContent=item.comment||"コメントなし"; row.appendChild(comment);
+    const actions=document.createElement("div"); actions.className="rule-actions watching-actions";
+    const edit=document.createElement("button"); edit.type="button"; edit.className="edit-rule"; edit.textContent="変更"; edit.onclick=()=>editWatching(item.id);
+    const del=document.createElement("button"); del.type="button"; del.className="delete-rule"; del.textContent="削除"; del.onclick=()=>deleteWatching(item.id);
+    actions.append(edit,del); row.appendChild(actions); list.appendChild(row);
+  });
+}
+async function saveWatchingCloud(item){
+  if(!supabaseReady||!user)return true;
+  const payload=JSON.stringify({title:item.title,type:item.type,date:item.date,comment:item.comment});
+  if(String(item.id).startsWith("watching-local-")){
+    const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:payload,category:WATCHING_CATEGORY}).select("id").single();
+    if(res.error) return false; item.id=res.data.id; return true;
+  }
+  const res=await supabaseClient.from("custom_rules").update({text:payload}).eq("id",item.id).eq("user_id",user.id).eq("category",WATCHING_CATEGORY); return !res.error;
+}
+async function addWatching(){
+  const title=document.getElementById("newWatchingTitle")?.value.trim()||"";
+  const type=document.getElementById("newWatchingType")?.value||"movie";
+  const date=document.getElementById("newWatchingDate")?.value||day();
+  const comment=document.getElementById("newWatchingComment")?.value.trim()||"";
+  if(!title){alert("作品名を入力してください。");return;}
+  const item={id:`watching-local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,title,type,date,comment};
+  state.watching.push(item); setLocalWatching(state.watching); const ok=await saveWatchingCloud(item); if(!ok)console.warn("鑑賞作品のクラウド保存に失敗しました");
+  setLocalWatching(state.watching); renderWatching();
+  ["newWatchingTitle","newWatchingComment"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  const d=document.getElementById("newWatchingDate"); if(d)d.value=day();
+}
+async function editWatching(id){
+  const item=state.watching.find(x=>String(x.id)===String(id)); if(!item)return;
+  const title=prompt("作品名を変更してください。",item.title); if(title===null)return;
+  const date=prompt("鑑賞日をYYYY-MM-DDで入力してください。",item.date||day()); if(date===null)return;
+  const comment=prompt("コメントを変更してください。",item.comment||""); if(comment===null)return;
+  item.title=title.trim()||item.title; item.date=date.trim(); item.comment=comment;
+  const ok=await saveWatchingCloud(item); setLocalWatching(state.watching); renderWatching(); if(!ok)alert("クラウドへの変更保存に失敗しました。端末には保存されています。");
+}
+async function deleteWatching(id){
+  const idx=state.watching.findIndex(x=>String(x.id)===String(id)); if(idx<0)return; const item=state.watching[idx];
+  if(!confirm(`「${item.title}」を削除しますか？`))return;
+  if(supabaseReady&&user&&!String(item.id).startsWith("watching-local-")){
+    const res=await supabaseClient.from("custom_rules").delete().eq("id",item.id).eq("user_id",user.id).eq("category",WATCHING_CATEGORY);
+    if(res.error){alert(`削除に失敗しました：${res.error.message}`);return;}
+  }
+  state.watching.splice(idx,1); setLocalWatching(state.watching); renderWatching();
+}
+function initWatching(){document.getElementById("addWatchingBtn")?.addEventListener("click",addWatching);const d=document.getElementById("newWatchingDate");if(d)d.value=day();renderWatching();}
+
 function getLocalReading(){ try{return JSON.parse(localStorage.getItem("readingBooks")||"[]")||[];}catch{return [];} }
 function setLocalReading(data){ localStorage.setItem("readingBooks",JSON.stringify(data)); }
 function calcReadingPercent(book){
@@ -845,12 +921,13 @@ async function loadCloud(){
   if(cr.error){console.error(cr.error); return;}
   const rows=cr.data||[];
   state.custom=rows
-    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY && x.category!==DAILY_PARAMETER_CATEGORY && x.category!==DAILY_MENTAL_CATEGORY)
+    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY && x.category!==DAILY_PARAMETER_CATEGORY && x.category!==DAILY_MENTAL_CATEGORY && x.category!==MURMUR_CATEGORY && x.category!==HOBBY_CATEGORY && x.category!==HOBBY_WORK_CATEGORY && x.category!==READING_CATEGORY && x.category!==WATCHING_CATEGORY)
     .map(x=>({id:x.id,text:x.text,cat:x.category,source:x.source||""}));
   state.priority=rows
     .filter(x=>x.category===PRIORITY_CATEGORY && x.text!==PRIORITY_SENTINEL_TEXT)
     .map(x=>({id:x.id,text:x.text}));
   state.medications=rows.filter(x=>x.category===MEDICATION_CATEGORY).map(parseMedicationRow);
+  await loadWatching();
   await loadDailyParameters();
   await loadMurmurs();
   render();
@@ -1038,7 +1115,7 @@ async function sendPasswordReset(){
 async function logout(){
   const {error}=await supabaseClient.auth.signOut();
   if(error){alert(error.message); return;}
-  user=null; state={checks:{},custom:[],priority:[],medications:[],parameters:{sleepHours:"",hallucinations:[],note:""},parameterRowId:null,murmurs:[],murmurPage:1};
+  user=null; state={checks:{},custom:[],priority:[],medications:[],parameters:{sleepHours:"",hallucinations:[],note:""},parameterRowId:null,murmurs:[],murmurPage:1,hobby:{dearMaster:"",works:[]},reading:[],watching:[]};
   setStatus("ログアウトしました");
   accountStatus.textContent="ログアウトしました。再ログインは次のログイン画面から行えます。";
   signOutBtn.classList.add("hidden");
@@ -1515,6 +1592,7 @@ const murmurTab=document.getElementById("murmurTab");
 const reportTab=document.getElementById("reportTab");
 const hobbyTab=document.getElementById("hobbyTab");
 const readingTab=document.getElementById("readingTab");
+const watchingTab=document.getElementById("watchingTab");
 const categoriesEl=document.getElementById("categories");
 const addRulesEl=document.querySelector("section.add");
 if(checksheetTab && categoriesEl && addRulesEl){
@@ -1529,6 +1607,7 @@ function switchAppTab(name){
   reportTab?.classList.toggle("active",name==="report");
   hobbyTab?.classList.toggle("active",name==="hobby");
   readingTab?.classList.toggle("active",name==="reading");
+  watchingTab?.classList.toggle("active",name==="watching");
 }
 document.querySelectorAll(".app-tab").forEach(btn=>btn.addEventListener("click",()=>switchAppTab(btn.dataset.tab)));
 switchAppTab("record");
@@ -1611,6 +1690,7 @@ document.getElementById("addBtn").onclick=async()=>{
   }
 };
 
+initWatching();
 document.getElementById("saveParametersBtn").onclick=saveDailyParameters;
 document.getElementById("saveUrgesBtn").onclick=saveUrges;
 document.getElementById("printBtn").onclick=()=>window.print();

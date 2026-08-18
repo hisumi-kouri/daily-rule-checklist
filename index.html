@@ -7,7 +7,7 @@
 
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css?v=0.44">
-  <title>毎日のルールチェック v0.48</title>
+  <title>毎日のルールチェック v0.49</title>
 </head>
 <body>
   <header>
@@ -27,6 +27,7 @@
     <button type="button" class="app-tab" data-tab="report">📝 報告</button>
     <button type="button" class="app-tab" data-tab="hobby">🎨 趣味</button>
     <button type="button" class="app-tab" data-tab="reading">📖 読書</button>
+    <button type="button" class="app-tab" data-tab="watching">🎬 鑑賞</button>
   </nav>
 
   <main>
@@ -81,6 +82,28 @@
       </section>
     </div>
 
+    <div id="watchingTab" class="tab-panel">
+      <section class="card watching-head">
+        <div class="section-head"><div><h2>🎬 鑑賞</h2><p class="muted">鑑賞した映画やドラマを記録できます。鑑賞日とコメントも保存できます。</p></div><span id="watchingCount" class="muted small">0作品</span></div>
+      </section>
+      <section class="card watching-card">
+        <div class="section-head"><h2>🎞️ 鑑賞作品</h2><span class="muted small">映画・ドラマ</span></div>
+        <div id="watchingList" class="watching-list"></div>
+      </section>
+      <section class="card watching-card">
+        <div class="section-head"><h2>➕ 鑑賞作品を追加</h2><span class="muted small">タイトル・種類・鑑賞日・コメント</span></div>
+        <div class="form watching-add-form">
+          <input id="newWatchingTitle" placeholder="作品名" maxlength="200">
+          <select id="newWatchingType">
+            <option value="movie">🎬 映画</option>
+            <option value="drama">📺 ドラマ</option>
+          </select>
+          <input id="newWatchingDate" type="date">
+          <textarea id="newWatchingComment" rows="3" maxlength="2000" placeholder="コメント・感想"></textarea>
+          <button type="button" id="addWatchingBtn">作品を追加</button>
+        </div>
+      </section>
+    </div>
     <div id="readingTab" class="tab-panel">
       <section class="card reading-head">
         <div class="section-head"><div><h2>📖 読書</h2><p class="muted">作品ごとに読書の進捗を記録できます。</p></div><span id="readingCount" class="muted small">0作品</span></div>
