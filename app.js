@@ -29,7 +29,7 @@ const base=[];
 
 let supabaseReady=false, user=null;
 let supabaseOffline=false;
-let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}, reading:[], watching:[]};
+let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}, reading:[], watching:[], schedule:[]};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
@@ -60,6 +60,7 @@ const HOBBY_CATEGORY="__hobby__";
 const HOBBY_WORK_CATEGORY="__hobby_work__";
 const READING_CATEGORY="__reading__";
 const WATCHING_CATEGORY="__watching__";
+const SCHEDULE_CATEGORY="__schedule__";
 const DEAR_MASTER_GOAL=100000000;
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
 const URGE_TYPES=[
@@ -725,6 +726,116 @@ function normalizeReading(data){
     return book;
   });
 }
+
+function getLocalSchedule(){ try{return JSON.parse(localStorage.getItem("scheduleItems")||"[]")||[];}catch{return [];} }
+function setLocalSchedule(data){ localStorage.setItem("scheduleItems",JSON.stringify(data)); }
+function parseScheduleRow(row){
+  try{const d=JSON.parse(row.text||"{}"); return {id:row.id,date:String(d.date||""),time:String(d.time||""),title:String(d.title||"用事"),detail:String(d.detail||""),category:String(d.category||"その他")};}
+  catch{return {id:row.id,date:"",time:"",title:row.text||"用事",detail:"",category:"その他"};}
+}
+function scheduleSort(a,b){
+  const aa=`${a.date||"9999-99-99"}T${a.time||"23:59"}`;
+  const bb=`${b.date||"9999-99-99"}T${b.time||"23:59"}`;
+  return aa.localeCompare(bb) || String(a.title).localeCompare(String(b.title),"ja");
+}
+async function loadSchedule(){
+  let data=getLocalSchedule();
+  if(supabaseReady&&user){
+    try{
+      const res=await supabaseClient.from("custom_rules").select("id,text,category,created_at").eq("user_id",user.id).eq("category",SCHEDULE_CATEGORY).order("created_at",{ascending:true});
+      if(!res.error) data=(res.data||[]).map(parseScheduleRow);
+    }catch(e){console.warn("スケジュール取得失敗",e);}
+  }
+  state.schedule=data; setLocalSchedule(data); renderSchedule();
+}
+function scheduleItemKey(id){ return `schedule:${id}`; }
+async function saveScheduleCloud(item){
+  if(!supabaseReady||!user)return true;
+  const payload=JSON.stringify({date:item.date,time:item.time,title:item.title,detail:item.detail,category:item.category});
+  if(String(item.id).startsWith("schedule-local-")){
+    const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:payload,category:SCHEDULE_CATEGORY}).select("id").single();
+    if(res.error)return false; item.id=res.data.id; return true;
+  }
+  const res=await supabaseClient.from("custom_rules").update({text:payload}).eq("id",item.id).eq("user_id",user.id).eq("category",SCHEDULE_CATEGORY);
+  return !res.error;
+}
+async function addSchedule(){
+  const date=document.getElementById("newScheduleDate")?.value||day();
+  const time=document.getElementById("newScheduleTime")?.value||"";
+  const title=document.getElementById("newScheduleTitle")?.value.trim()||"";
+  const detail=document.getElementById("newScheduleDetail")?.value.trim()||"";
+  const category=document.getElementById("newScheduleCategory")?.value.trim()||"その他";
+  if(!title){alert("用事を入力してください。");return;}
+  const item={id:`schedule-local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,date,time,title,detail,category};
+  state.schedule.push(item); setLocalSchedule(state.schedule); const ok=await saveScheduleCloud(item); setLocalSchedule(state.schedule); renderSchedule();
+  if(!ok)alert("クラウド保存に失敗しました。端末には保存されています。");
+  document.getElementById("newScheduleTitle").value=""; document.getElementById("newScheduleDetail").value=""; document.getElementById("newScheduleCategory").value="";
+}
+async function toggleSchedule(id,checked){
+  state.checks[scheduleItemKey(id)]=checked;
+  if(supabaseReady&&user){
+    const res=await supabaseClient.from("daily_check_states").upsert({user_id:user.id,check_date:day(),item_id:scheduleItemKey(id),checked},{onConflict:"user_id,check_date,item_id"});
+    if(res.error)console.warn("予定完遂状態の保存失敗",res.error);
+  }
+  renderSchedule();
+}
+async function editSchedule(id){
+  const item=state.schedule.find(x=>String(x.id)===String(id)); if(!item)return;
+  const title=prompt("用事を変更してください。",item.title); if(title===null)return;
+  const detail=prompt("詳細を変更してください。",item.detail||""); if(detail===null)return;
+  const date=prompt("日付（YYYY-MM-DD）",item.date||day()); if(date===null)return;
+  const time=prompt("時間（HH:MM）",item.time||""); if(time===null)return;
+  const category=prompt("カテゴリー",item.category||"その他"); if(category===null)return;
+  item.title=title.trim()||item.title; item.detail=detail; item.date=date.trim()||item.date; item.time=time.trim(); item.category=category.trim()||"その他";
+  const ok=await saveScheduleCloud(item); setLocalSchedule(state.schedule); renderSchedule(); if(!ok)alert("クラウドへの変更保存に失敗しました。端末には保存されています。");
+}
+async function deleteSchedule(id){
+  const idx=state.schedule.findIndex(x=>String(x.id)===String(id)); if(idx<0)return; const item=state.schedule[idx];
+  if(!confirm(`「${item.title}」の予定を削除しますか？`))return;
+  if(supabaseReady&&user&&!String(item.id).startsWith("schedule-local-")){
+    const res=await supabaseClient.from("custom_rules").delete().eq("id",item.id).eq("user_id",user.id).eq("category",SCHEDULE_CATEGORY); if(res.error){alert(`削除に失敗しました：${res.error.message}`);return;}
+  }
+  delete state.checks[scheduleItemKey(item.id)];
+  state.schedule.splice(idx,1); setLocalSchedule(state.schedule); renderSchedule();
+}
+function refreshScheduleCategories(){
+  const select=document.getElementById("scheduleCategoryFilter"); if(!select)return;
+  const current=select.value; const cats=[...new Set((state.schedule||[]).map(x=>x.category||"その他"))].sort((a,b)=>a.localeCompare(b,"ja"));
+  select.innerHTML=`<option value="all">すべて</option>`+cats.map(c=>`<option value="${c.replaceAll("&","&amp;").replaceAll('"','&quot;')}">${c}</option>`).join("");
+  if(cats.includes(current))select.value=current;
+}
+function renderSchedule(){
+  const list=document.getElementById("scheduleList"),count=document.getElementById("scheduleCount"); if(!list||!count)return;
+  refreshScheduleCategories(); const filter=document.getElementById("scheduleCategoryFilter")?.value||"all";
+  const all=[...(state.schedule||[])].sort(scheduleSort); const items=filter==="all"?all:all.filter(x=>(x.category||"その他")===filter);
+  count.textContent=`${all.length}件`;
+  list.innerHTML="";
+  if(!items.length){const e=document.createElement("p");e.className="muted small";e.textContent="予定はありません。";list.appendChild(e);return;}
+  items.forEach(item=>{
+    const row=document.createElement("article"); row.className="schedule-item";
+    const top=document.createElement("div"); top.className="schedule-item-top";
+    const left=document.createElement("div"); left.className="schedule-main";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!state.checks[scheduleItemKey(item.id)]; cb.title="予定を完遂として記録"; cb.onchange=()=>toggleSchedule(item.id,cb.checked);
+    const title=document.createElement("div"); title.className="schedule-title"; title.textContent=item.title;
+    if(cb.checked) title.classList.add("schedule-done");
+    const meta=document.createElement("div"); meta.className="schedule-meta"; meta.textContent=`${item.date?item.date.replaceAll("-","/"):"日付未入力"}${item.time?` ${item.time}`:""}　｜　${item.category||"その他"}`;
+    left.append(cb,title,meta); top.append(left);
+    const actions=document.createElement("div"); actions.className="rule-actions";
+    const edit=document.createElement("button"); edit.type="button"; edit.className="edit-rule"; edit.textContent="変更"; edit.onclick=()=>editSchedule(item.id);
+    const del=document.createElement("button"); del.type="button"; del.className="delete-rule"; del.textContent="削除"; del.onclick=()=>deleteSchedule(item.id);
+    actions.append(edit,del); top.append(actions); row.append(top);
+    if(item.detail){const detail=document.createElement("p"); detail.className="schedule-detail"; detail.textContent=item.detail; row.append(detail);}
+    list.appendChild(row);
+  });
+}
+function initSchedule(){
+  document.getElementById("addScheduleBtn")?.addEventListener("click",addSchedule);
+  document.getElementById("scheduleCategoryFilter")?.addEventListener("change",renderSchedule);
+  document.getElementById("clearScheduleFilter")?.addEventListener("click",()=>{const s=document.getElementById("scheduleCategoryFilter");if(s)s.value="all";renderSchedule();});
+  const d=document.getElementById("newScheduleDate"); if(d)d.value=day();
+  renderSchedule();
+}
+
 function renderReading(){
   const list=document.getElementById("readingList"), count=document.getElementById("readingCount");
   if(!list||!count)return; const books=state.reading||[]; count.textContent=`${books.length}作品`; list.innerHTML="";
@@ -923,13 +1034,14 @@ async function loadCloud(){
   if(cr.error){console.error(cr.error); return;}
   const rows=cr.data||[];
   state.custom=rows
-    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY && x.category!==DAILY_PARAMETER_CATEGORY && x.category!==DAILY_MENTAL_CATEGORY && x.category!==MURMUR_CATEGORY && x.category!==HOBBY_CATEGORY && x.category!==HOBBY_WORK_CATEGORY && x.category!==READING_CATEGORY && x.category!==WATCHING_CATEGORY)
+    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY && x.category!==DAILY_PARAMETER_CATEGORY && x.category!==DAILY_MENTAL_CATEGORY && x.category!==MURMUR_CATEGORY && x.category!==HOBBY_CATEGORY && x.category!==HOBBY_WORK_CATEGORY && x.category!==READING_CATEGORY && x.category!==WATCHING_CATEGORY && x.category!==SCHEDULE_CATEGORY)
     .map(x=>({id:x.id,text:x.text,cat:x.category,source:x.source||""}));
   state.priority=rows
     .filter(x=>x.category===PRIORITY_CATEGORY && x.text!==PRIORITY_SENTINEL_TEXT)
     .map(x=>({id:x.id,text:x.text}));
   state.medications=rows.filter(x=>x.category===MEDICATION_CATEGORY).map(parseMedicationRow);
   await loadWatching();
+  await loadSchedule();
   await loadDailyParameters();
   await loadMurmurs();
   render();
@@ -1023,6 +1135,16 @@ async function migrateAnonymousDataTo(targetUserId, anonymousState){
       if(error) throw error;
     }
   }
+
+  for(const item of anonymousState.schedule||[]){
+    const payload=JSON.stringify({date:item.date,time:item.time,title:item.title,detail:item.detail,category:item.category});
+    const {data:existing,error:findError}=await supabaseClient.from("custom_rules").select("id").eq("user_id",targetUserId).eq("category",SCHEDULE_CATEGORY).eq("text",payload).limit(1);
+    if(findError) throw findError;
+    if(!existing?.length){
+      const {error}=await supabaseClient.from("custom_rules").insert({user_id:targetUserId,text:payload,category:SCHEDULE_CATEGORY});
+      if(error) throw error;
+    }
+  }
 }
 
 async function loginExistingAccount(){
@@ -1033,7 +1155,8 @@ async function loginExistingAccount(){
   const previousUser=user;
   const previousState={
     checks:{...state.checks},
-    custom:[...(state.custom||[])]
+    custom:[...(state.custom||[])],
+    schedule:[...(state.schedule||[])]
   };
 
   setAnonAuthMessage("ログインしています…");
@@ -1117,7 +1240,7 @@ async function sendPasswordReset(){
 async function logout(){
   const {error}=await supabaseClient.auth.signOut();
   if(error){alert(error.message); return;}
-  user=null; state={checks:{},custom:[],priority:[],medications:[],parameters:{sleepHours:"",hallucinations:[],note:""},parameterRowId:null,murmurs:[],murmurPage:1,hobby:{dearMaster:"",works:[]},reading:[],watching:[]};
+  user=null; state={checks:{},custom:[],priority:[],medications:[],parameters:{sleepHours:"",hallucinations:[],note:""},parameterRowId:null,murmurs:[],murmurPage:1,hobby:{dearMaster:"",works:[]},reading:[],watching:[],schedule:[]};
   setStatus("ログアウトしました");
   accountStatus.textContent="ログアウトしました。再ログインは次のログイン画面から行えます。";
   signOutBtn.classList.add("hidden");
@@ -1635,6 +1758,7 @@ const reportTab=document.getElementById("reportTab");
 const hobbyTab=document.getElementById("hobbyTab");
 const readingTab=document.getElementById("readingTab");
 const watchingTab=document.getElementById("watchingTab");
+const scheduleTab=document.getElementById("scheduleTab");
 const categoriesEl=document.getElementById("categories");
 const addRulesEl=document.querySelector("section.add");
 if(checksheetTab && categoriesEl && addRulesEl){
@@ -1650,6 +1774,7 @@ function switchAppTab(name){
   hobbyTab?.classList.toggle("active",name==="hobby");
   readingTab?.classList.toggle("active",name==="reading");
   watchingTab?.classList.toggle("active",name==="watching");
+  scheduleTab?.classList.toggle("active",name==="schedule");
 }
 document.querySelectorAll(".app-tab").forEach(btn=>btn.addEventListener("click",()=>switchAppTab(btn.dataset.tab)));
 switchAppTab("record");
@@ -1670,6 +1795,7 @@ initUrgeChartTabs();
 initReading();
 loadReading();
 initMurmurs();
+initSchedule();
 initReport();
 initHobby();
 loadHobby();

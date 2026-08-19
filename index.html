@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#4f46e5">
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=0.50">
-  <title>毎日のルールチェック v0.50</title>
+  <link rel="stylesheet" href="style.css?v=0.52">
+  <title>毎日のルールチェック v0.52</title>
 </head>
 <body>
   <header>
@@ -28,6 +28,7 @@
     <button type="button" class="app-tab" data-tab="hobby">🎨 趣味</button>
     <button type="button" class="app-tab" data-tab="reading">📖 読書</button>
     <button type="button" class="app-tab" data-tab="watching">🎬 鑑賞</button>
+    <button type="button" class="app-tab" data-tab="schedule">📅 スケジュール</button>
   </nav>
 
   <main>
@@ -128,6 +129,30 @@
           <input id="newWatchingDate" type="date">
           <textarea id="newWatchingComment" placeholder="コメント・感想"></textarea>
           <button type="button" id="addWatchingBtn">作品を追加</button>
+        </div>
+      </section>
+    </div>
+    <div id="scheduleTab" class="tab-panel">
+      <section class="card schedule-head">
+        <div class="section-head"><div><h2>📅 スケジュール</h2><p class="muted">予定を日付・時間順に管理し、完遂状況をチェックできます。</p></div><span id="scheduleCount" class="muted small">0件</span></div>
+        <div class="schedule-filter-row">
+          <label>カテゴリーで検索<select id="scheduleCategoryFilter"><option value="all">すべて</option></select></label>
+          <button type="button" id="clearScheduleFilter" class="secondary">フィルター解除</button>
+        </div>
+      </section>
+      <section class="card schedule-card">
+        <div class="section-head"><h2>📋 予定一覧</h2><span class="muted small">日付・時間順</span></div>
+        <div id="scheduleList" class="schedule-list"></div>
+      </section>
+      <section class="card schedule-card">
+        <div class="section-head"><h2>➕ 予定を追加</h2><span class="muted small">日付・時間・用事・詳細・カテゴリー</span></div>
+        <div class="form schedule-add-form">
+          <input id="newScheduleDate" type="date">
+          <input id="newScheduleTime" type="time">
+          <input id="newScheduleTitle" placeholder="用事" maxlength="200">
+          <textarea id="newScheduleDetail" placeholder="詳細" maxlength="2000"></textarea>
+          <input id="newScheduleCategory" placeholder="カテゴリー（例：通院、仕事、私用）" maxlength="100">
+          <button type="button" id="addScheduleBtn">予定を追加</button>
         </div>
       </section>
     </div>
