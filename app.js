@@ -29,7 +29,7 @@ const base=[];
 
 let supabaseReady=false, user=null;
 let supabaseOffline=false;
-let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}, reading:[], watching:[], schedule:[]};
+let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, parameterNoteHistory:[], murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}, reading:[], watching:[], schedule:[]};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
@@ -404,13 +404,22 @@ async function loadDailyParameters(){
   if(local){
     try{ state.parameters=JSON.parse(local)||state.parameters; }catch{}
   }
-  if(!supabaseReady||!user){ renderDailyParameters(); return; }
+  if(!supabaseReady||!user){
+    state.parameterNoteHistory=Object.keys(localStorage).filter(k=>k.startsWith("dailyParameters:")).map(k=>{
+      try{ const d=JSON.parse(localStorage.getItem(k)||"{}"); return {date:d.date||k.slice(17),note:d.note||""}; }catch{return null;}
+    }).filter(x=>x&&String(x.note).trim());
+    renderDailyParameters();
+    renderReport();
+    return;
+  }
   const res=await supabaseClient.from("custom_rules").select("id,text,category")
     .eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY).order("created_at",{ascending:false});
   if(res.error){console.error(res.error);renderDailyParameters();return;}
+  state.parameterNoteHistory=[];
   for(const row of res.data||[]){
     try{
       const data=JSON.parse(row.text||"{}");
+      if(String(data.note||"").trim()) state.parameterNoteHistory.push({date:data.date||"日付未設定",note:data.note});
       if(data.date===day()){
         state.parameters={sleepHours:data.sleepHours??"",hallucinations:Array.isArray(data.hallucinations)?data.hallucinations:[],note:data.note??""};
         state.parameterRowId=row.id;
@@ -451,6 +460,7 @@ async function saveDailyParameters(){
   if(!supabaseReady||!user){
     const st=document.getElementById("parameterStatus"); if(st)st.textContent="この端末に保存しました。ログインするとクラウド同期できます。";
     await loadParameterTrendHistory();
+    renderReport();
     return;
   }
   let rowId=state.parameterRowId;
@@ -474,6 +484,11 @@ async function saveDailyParameters(){
   if(error){console.error(error);alert(`保存に失敗しました：${error.message}`);return;}
   const st=document.getElementById("parameterStatus"); if(st)st.textContent="☁️ その他パラメーターを保存しました";
   await loadParameterTrendHistory();
+  if(!state.parameterNoteHistory) state.parameterNoteHistory=[];
+  const i=state.parameterNoteHistory.findIndex(x=>x.date===day());
+  if(note){ if(i>=0) state.parameterNoteHistory[i]={date:day(),note}; else state.parameterNoteHistory.push({date:day(),note}); }
+  else if(i>=0) state.parameterNoteHistory.splice(i,1);
+  renderReport();
 }
 
 function getLocalMurmurs(){
@@ -971,23 +986,69 @@ async function deleteMurmur(id){
   if(supabaseReady&&user&&!String(id).startsWith("local-")){ try{await supabaseClient.from("custom_rules").delete().eq("id",id).eq("user_id",user.id).eq("category",MURMUR_CATEGORY);}catch{} }
   state.murmurs=state.murmurs.filter(x=>String(x.id)!==String(id)); renderMurmurs(); renderReport();
 }
+function getParameterNoteReports(){
+  const rows=[];
+  const addRow=(date,note)=>{
+    const text=String(note||"").trim();
+    if(text) rows.push({date:date||"日付未設定",note:text});
+  };
+  const localKeys=[];
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const key=localStorage.key(i)||"";
+      if(key.startsWith("dailyParameters:")){
+        const date=key.slice("dailyParameters:".length);
+        const data=JSON.parse(localStorage.getItem(key)||"{}");
+        addRow(date,data.note);
+      }
+    }
+  }catch{}
+  if(state.parameterNoteHistory&&Array.isArray(state.parameterNoteHistory)){
+    state.parameterNoteHistory.forEach(x=>addRow(x.date,x.note));
+  }
+  const seen=new Set();
+  return rows.filter(x=>{const k=`${x.date}\n${x.note}`; if(seen.has(k))return false; seen.add(k); return true;})
+    .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+}
+
 function renderReport(){
   const list=document.getElementById("reportList");
   const empty=document.getElementById("reportEmpty");
   const count=document.getElementById("reportCount");
   if(!list||!empty||!count)return;
-  const items=(state.murmurs||[]).filter(x=>Number(x.mood)>=6);
-  count.textContent=`${items.length}件`;
+  const murmurs=(state.murmurs||[]).filter(x=>Number(x.mood)>=6);
+  const notes=getParameterNoteReports();
+  const total=murmurs.length+notes.length;
+  count.textContent=`${total}件`;
   list.innerHTML="";
-  empty.style.display=items.length?"none":"block";
-  items.forEach((item,index)=>{
-    const article=document.createElement("article"); article.className="report-entry";
+  empty.style.display=total?"none":"block";
+
+  const entries=[
+    ...murmurs.map(item=>({type:"murmur",date:item.date||"日付未設定",time:item.createdAt||"",item})),
+    ...notes.map(item=>({type:"parameter",date:item.date,time:"",item}))
+  ].sort((a,b)=>{
+    const ad=`${a.date} ${a.time}`.trim(), bd=`${b.date} ${b.time}`.trim();
+    return bd.localeCompare(ad);
+  });
+
+  entries.forEach((entry,index)=>{
+    const article=document.createElement("article");
+    article.className=entry.type==="parameter"?"report-entry parameter-report-entry":"report-entry";
     const head=document.createElement("div"); head.className="report-entry-head";
-    const date=document.createElement("strong"); date.textContent=`${index+1}. ${item.date||"日付未設定"}`;
-    const mood=document.createElement("span"); mood.className="report-mood"; mood.textContent=`気分 ${item.mood}/10`;
-    head.append(date,mood);
-    const body=document.createElement("p"); body.className="report-entry-body"; body.textContent=item.text||"";
-    article.append(head,body); list.appendChild(article);
+    const date=document.createElement("strong"); date.textContent=`${index+1}. ${entry.date}`;
+    head.appendChild(date);
+    if(entry.type==="murmur"){
+      const mood=document.createElement("span"); mood.className="report-mood"; mood.textContent=`気分 ${entry.item.mood}/10`;
+      head.appendChild(mood);
+    }else{
+      const label=document.createElement("span"); label.className="parameter-report-label"; label.textContent="その他パラメーターの補足";
+      head.appendChild(label);
+    }
+    const body=document.createElement("p");
+    body.className="report-entry-body";
+    body.textContent=entry.type==="parameter"?entry.item.note:(entry.item.text||"");
+    article.append(head,body);
+    list.appendChild(article);
   });
 }
 function printReport(){
