@@ -432,7 +432,7 @@ function renderDailyParameters(){
   Object.entries(checks).forEach(([id,label])=>{
     const el=document.getElementById(id); if(el)el.checked=(p.hallucinations||[]).includes(label);
   });
-  const note=document.getElementById("parameterNote"); if(note)note.value=p.note||"";
+  const note=document.getElementById("parameterNote"); if(note){note.value=p.note||""; updateParameterNoteUI?.();}
 }
 
 async function saveDailyParameters(){
@@ -746,7 +746,7 @@ async function loadSchedule(){
       if(!res.error) data=(res.data||[]).map(parseScheduleRow);
     }catch(e){console.warn("スケジュール取得失敗",e);}
   }
-  state.schedule=data; setLocalSchedule(data); renderSchedule();
+  state.schedule=data; setLocalSchedule(data); renderSchedule(); renderPrioritySchedule();
 }
 function scheduleItemKey(id){ return `schedule:${id}`; }
 async function saveScheduleCloud(item){
@@ -767,7 +767,7 @@ async function addSchedule(){
   const category=document.getElementById("newScheduleCategory")?.value.trim()||"その他";
   if(!title){alert("用事を入力してください。");return;}
   const item={id:`schedule-local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,date,time,title,detail,category};
-  state.schedule.push(item); setLocalSchedule(state.schedule); const ok=await saveScheduleCloud(item); setLocalSchedule(state.schedule); renderSchedule();
+  state.schedule.push(item); setLocalSchedule(state.schedule); const ok=await saveScheduleCloud(item); setLocalSchedule(state.schedule); renderSchedule(); renderPrioritySchedule(); renderPrioritySchedule();
   if(!ok)alert("クラウド保存に失敗しました。端末には保存されています。");
   document.getElementById("newScheduleTitle").value=""; document.getElementById("newScheduleDetail").value=""; document.getElementById("newScheduleCategory").value="";
 }
@@ -787,7 +787,7 @@ async function editSchedule(id){
   const time=prompt("時間（HH:MM）",item.time||""); if(time===null)return;
   const category=prompt("カテゴリー",item.category||"その他"); if(category===null)return;
   item.title=title.trim()||item.title; item.detail=detail; item.date=date.trim()||item.date; item.time=time.trim(); item.category=category.trim()||"その他";
-  const ok=await saveScheduleCloud(item); setLocalSchedule(state.schedule); renderSchedule(); if(!ok)alert("クラウドへの変更保存に失敗しました。端末には保存されています。");
+  const ok=await saveScheduleCloud(item); setLocalSchedule(state.schedule); renderSchedule(); renderPrioritySchedule(); if(!ok)alert("クラウドへの変更保存に失敗しました。端末には保存されています。");
 }
 async function deleteSchedule(id){
   const idx=state.schedule.findIndex(x=>String(x.id)===String(id)); if(idx<0)return; const item=state.schedule[idx];
@@ -796,7 +796,7 @@ async function deleteSchedule(id){
     const res=await supabaseClient.from("custom_rules").delete().eq("id",item.id).eq("user_id",user.id).eq("category",SCHEDULE_CATEGORY); if(res.error){alert(`削除に失敗しました：${res.error.message}`);return;}
   }
   delete state.checks[scheduleItemKey(item.id)];
-  state.schedule.splice(idx,1); setLocalSchedule(state.schedule); renderSchedule();
+  state.schedule.splice(idx,1); setLocalSchedule(state.schedule); renderSchedule(); renderPrioritySchedule();
 }
 function refreshScheduleCategories(){
   const select=document.getElementById("scheduleCategoryFilter"); if(!select)return;
@@ -1422,12 +1422,12 @@ function renderParameterTrend(points){
   if(!chart)return;
   chart.innerHTML="";
   const wrap=document.createElement("div"); wrap.className="parameter-trend-table";
-  const headers=["日付","睡眠","幻視","幻聴","幻触","被害妄想","その他の幻覚"];
+  const headers=["日付","睡眠","幻視","幻聴","幻触","被害妄想","その他の幻覚","補足"];
   const thead=document.createElement("div"); thead.className="parameter-trend-row parameter-trend-header";
   headers.forEach(h=>{const el=document.createElement("span"); el.textContent=h; thead.appendChild(el);}); wrap.appendChild(thead);
   points.forEach(p=>{
     const row=document.createElement("div"); row.className="parameter-trend-row";
-    const cells=[shortDate(p.date),p.sleep==null?"—":`${p.sleep}h`,p.visual?"✓":"—",p.auditory?"✓":"—",p.tactile?"✓":"—",p.delusion?"✓":"—",p.other?"✓":"—"];
+    const cells=[shortDate(p.date),p.sleep==null?"—":`${p.sleep}h`,p.visual?"✓":"—",p.auditory?"✓":"—",p.tactile?"✓":"—",p.delusion?"✓":"—",p.other?"✓":"—",p.note||"—"];
     cells.forEach(c=>{const el=document.createElement("span"); el.textContent=c; row.appendChild(el);});
     wrap.appendChild(row);
   });
@@ -1437,7 +1437,7 @@ function renderParameterTrend(points){
 async function loadParameterTrendHistory(days=urgeChartDays){
   const chart=document.getElementById("parameterTrendChart"); if(!chart)return;
   const dates=Array.from({length:days},(_,i)=>dateOffset(i-days+1));
-  const blank=()=>({sleep:null,visual:false,auditory:false,tactile:false,delusion:false,other:false});
+  const blank=()=>({sleep:null,visual:false,auditory:false,tactile:false,delusion:false,other:false,note:""});
   const byDate={};
   for(const date of dates){
     const raw=localStorage.getItem(`dailyParameters:${date}`);
@@ -1452,7 +1452,8 @@ async function loadParameterTrendHistory(days=urgeChartDays){
       auditory:(state.parameters.hallucinations||[]).includes("幻聴"),
       tactile:(state.parameters.hallucinations||[]).includes("幻触"),
       delusion:(state.parameters.hallucinations||[]).includes("被害妄想"),
-      other:(state.parameters.hallucinations||[]).includes("幻覚")
+      other:(state.parameters.hallucinations||[]).includes("幻覚"),
+      note:state.parameters.note||""
     };
   }
   if(supabaseReady&&user){
@@ -1469,7 +1470,8 @@ async function loadParameterTrendHistory(days=urgeChartDays){
             auditory:(d.hallucinations||[]).includes("幻聴"),
             tactile:(d.hallucinations||[]).includes("幻触"),
             delusion:(d.hallucinations||[]).includes("被害妄想"),
-            other:(d.hallucinations||[]).includes("幻覚")
+            other:(d.hallucinations||[]).includes("幻覚"),
+            note:d.note||""
           };
         }catch{}
       }
@@ -1607,7 +1609,31 @@ function renderUrges(){
   }
 }
 
+function renderPrioritySchedule(){
+  const wrap=document.getElementById("priorityScheduleList");
+  if(!wrap)return;
+  wrap.innerHTML="";
+  const today=day();
+  const upcoming=[...(state.schedule||[])].filter(item=>item.date===today).sort(scheduleSort);
+  if(!upcoming.length){
+    const empty=document.createElement("div"); empty.className="priority-schedule-empty";
+    empty.textContent="今日は登録されている予定はありません。"; wrap.appendChild(empty); return;
+  }
+  upcoming.forEach(item=>{
+    const row=document.createElement("div"); row.className="priority-schedule-item";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!state.checks[scheduleItemKey(item.id)];
+    cb.onchange=()=>toggleSchedule(item.id,cb.checked);
+    const body=document.createElement("div"); body.className="priority-schedule-body";
+    const title=document.createElement("div"); title.className="priority-schedule-title";
+    title.textContent=`${item.time?item.time+"　":""}${item.title}`;
+    if(cb.checked) title.classList.add("schedule-done");
+    const meta=document.createElement("div"); meta.className="priority-schedule-meta"; meta.textContent=item.category||"その他";
+    body.append(title,meta); row.append(cb,body); wrap.appendChild(row);
+  });
+}
+
 function renderPriority(){
+  renderPrioritySchedule();
   const wrap=document.getElementById("priorityList");
   if(!wrap)return;
   wrap.innerHTML="";
@@ -1859,7 +1885,21 @@ document.getElementById("addBtn").onclick=async()=>{
 };
 
 initWatching();
-document.getElementById("saveParametersBtn").onclick=saveDailyParameters;
+const parameterNoteInput=document.getElementById("parameterNote");
+const parameterNoteCount=document.getElementById("parameterNoteCount");
+const parameterNotePreview=document.getElementById("parameterNotePreview");
+function updateParameterNoteUI(){
+  const text=parameterNoteInput?.value||"";
+  if(parameterNoteCount) parameterNoteCount.textContent=`${text.length} / 2000`;
+  if(parameterNotePreview){
+    parameterNotePreview.textContent=text.trim()?`今日の補足：${text.trim()}`:"";
+    parameterNotePreview.classList.toggle("hidden",!text.trim());
+  }
+}
+parameterNoteInput?.addEventListener("input",updateParameterNoteUI);
+updateParameterNoteUI();
+document.getElementById("saveParametersBtn").onclick=async()=>{await saveDailyParameters();updateParameterNoteUI();};
+document.getElementById("openScheduleTabBtn")?.addEventListener("click",()=>switchAppTab("schedule"));
 document.getElementById("saveUrgesBtn").onclick=saveUrges;
 document.getElementById("printBtn").onclick=()=>window.print();
 

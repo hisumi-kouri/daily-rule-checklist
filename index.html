@@ -262,6 +262,16 @@
         <input id="newPriorityText" placeholder="最優先の項目を追加">
         <button id="addPriorityBtn">追加</button>
       </div>
+      <div class="priority-schedule-box">
+        <div class="priority-schedule-head">
+          <div>
+            <strong>📅 今日のスケジュール</strong>
+            <span class="muted small">完遂するとチェックできます</span>
+          </div>
+          <button type="button" id="openScheduleTabBtn" class="secondary">予定を見る</button>
+        </div>
+        <div id="priorityScheduleList" class="priority-schedule-list"></div>
+      </div>
       <p>この順番を忘れない。</p>
     </section>
 
@@ -337,10 +347,13 @@
           <label><input type="checkbox" id="hallucinationOther"> 幻覚（その他）</label>
         </div>
       </div>
-      <div class="parameter-group">
-        <label for="parameterNote">補足</label>
-        <textarea id="parameterNote" rows="5" maxlength="2000" placeholder="今日の状態について自由に入力できます"></textarea>
+      <div class="parameter-group parameter-note-group">
+        <label for="parameterNote">📝 補足・気づいたこと</label>
+        <p class="parameter-help">その日の体調、気になったこと、症状のきっかけ、周囲の状況などを自由に残せます。</p>
+        <textarea id="parameterNote" rows="6" maxlength="2000" placeholder="例：朝から不安が強かった。昼休みに少し落ち着いた。音が気になったのでイヤフォンを使用した。"></textarea>
+        <div class="parameter-note-meta"><span>最大2000文字</span><span id="parameterNoteCount">0 / 2000</span></div>
       </div>
+      <div id="parameterNotePreview" class="parameter-note-preview hidden"></div>
       <button type="button" id="saveParametersBtn" class="parameter-save">💾 その他パラメーターを保存</button>
       <p id="parameterStatus" class="muted small"></p>
     </section>
@@ -362,7 +375,7 @@
     </div>
   </main>
 
-  <footer>Supabase同期版 v0.48</footer>
-  <script type="module" src="app.js?v=0.44"></script>
+  <footer>Supabase同期版 v0.53</footer>
+  <script type="module" src="app.js?v=0.53"></script>
 </body>
 </html>
