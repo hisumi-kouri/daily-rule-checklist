@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#4f46e5">
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=0.52">
-  <title>毎日のルールチェック v0.52</title>
+  <link rel="stylesheet" href="style.css?v=0.48">
+  <title>毎日のルールチェック v0.48</title>
 </head>
 <body>
   <header>
@@ -27,8 +27,6 @@
     <button type="button" class="app-tab" data-tab="report">📝 報告</button>
     <button type="button" class="app-tab" data-tab="hobby">🎨 趣味</button>
     <button type="button" class="app-tab" data-tab="reading">📖 読書</button>
-    <button type="button" class="app-tab" data-tab="watching">🎬 鑑賞</button>
-    <button type="button" class="app-tab" data-tab="schedule">📅 スケジュール</button>
   </nav>
 
   <main>
@@ -103,59 +101,6 @@
         </div>
       </section>
     </div>
-
-    <div id="watchingTab" class="tab-panel">
-      <section class="card watching-head">
-        <div class="section-head"><div><h2>🎬 鑑賞</h2><p class="muted">鑑賞した映画・ドラマ・アニメを記録できます。</p></div><span id="watchingCount" class="muted small">0作品</span></div>
-      </section>
-      <section class="card watching-card">
-        <div class="section-head"><h2>🎞️ 鑑賞作品</h2><span class="muted small">変更・削除できます</span></div>
-        <div id="watchingList" class="watching-list"></div>
-      </section>
-      <section class="card watching-card">
-        <div class="section-head"><h2>➕ 鑑賞作品を追加</h2><span class="muted small">作品名・ジャンル・鑑賞日・コメント</span></div>
-        <div class="form watching-add-form">
-          <input id="newWatchingTitle" placeholder="作品名" maxlength="200">
-          <select id="newWatchingType">
-            <option value="movie">🎬 映画</option>
-            <option value="drama">📺 ドラマ</option>
-          </select>
-          <select id="newWatchingGenre">
-            <option value="映画">映画</option>
-            <option value="ドラマ">ドラマ</option>
-            <option value="アニメ">アニメ</option>
-            <option value="その他">その他</option>
-          </select>
-          <input id="newWatchingDate" type="date">
-          <textarea id="newWatchingComment" placeholder="コメント・感想"></textarea>
-          <button type="button" id="addWatchingBtn">作品を追加</button>
-        </div>
-      </section>
-    </div>
-    <div id="scheduleTab" class="tab-panel">
-      <section class="card schedule-head">
-        <div class="section-head"><div><h2>📅 スケジュール</h2><p class="muted">予定を日付・時間順に管理し、完遂状況をチェックできます。</p></div><span id="scheduleCount" class="muted small">0件</span></div>
-        <div class="schedule-filter-row">
-          <label>カテゴリーで検索<select id="scheduleCategoryFilter"><option value="all">すべて</option></select></label>
-          <button type="button" id="clearScheduleFilter" class="secondary">フィルター解除</button>
-        </div>
-      </section>
-      <section class="card schedule-card">
-        <div class="section-head"><h2>📋 予定一覧</h2><span class="muted small">日付・時間順</span></div>
-        <div id="scheduleList" class="schedule-list"></div>
-      </section>
-      <section class="card schedule-card">
-        <div class="section-head"><h2>➕ 予定を追加</h2><span class="muted small">日付・時間・用事・詳細・カテゴリー</span></div>
-        <div class="form schedule-add-form">
-          <input id="newScheduleDate" type="date">
-          <input id="newScheduleTime" type="time">
-          <input id="newScheduleTitle" placeholder="用事" maxlength="200">
-          <textarea id="newScheduleDetail" placeholder="詳細" maxlength="2000"></textarea>
-          <input id="newScheduleCategory" placeholder="カテゴリー（例：通院、仕事、私用）" maxlength="100">
-          <button type="button" id="addScheduleBtn">予定を追加</button>
-        </div>
-      </section>
-    </div>
     <div id="reportTab" class="tab-panel">
       <section class="card report-head">
         <div class="section-head"><div><h2>📝 報告書</h2><p class="muted">「呟き」のうち、気分が6以上の記録を自動でまとめます。</p></div><span id="reportCount" class="muted small">0件</span></div>
@@ -165,7 +110,7 @@
         </div>
       </section>
       <section class="card report-card">
-        <div id="reportEmpty" class="muted small">報告に載せる記録はありません。</div>
+        <div id="reportEmpty" class="muted small">気分6以上の呟きはありません。</div>
         <div id="reportList" class="report-list"></div>
       </section>
     </div>
@@ -262,16 +207,6 @@
         <input id="newPriorityText" placeholder="最優先の項目を追加">
         <button id="addPriorityBtn">追加</button>
       </div>
-      <div class="priority-schedule-box">
-        <div class="priority-schedule-head">
-          <div>
-            <strong>📅 今日のスケジュール</strong>
-            <span class="muted small">完遂するとチェックできます</span>
-          </div>
-          <button type="button" id="openScheduleTabBtn" class="secondary">予定を見る</button>
-        </div>
-        <div id="priorityScheduleList" class="priority-schedule-list"></div>
-      </div>
       <p>この順番を忘れない。</p>
     </section>
 
@@ -308,8 +243,8 @@
 </div>
       <div class="parameter-trend-block">
         <div class="parameter-trend-title">📝 その他パラメーターの推移</div>
-        <div id="parameterTrendChart" class="parameter-trend-chart" aria-label="睡眠時間と症状・体験の推移"></div>
-        <div class="parameter-trend-legend"><span>睡眠時間</span><span>幻視</span><span>幻聴</span><span>幻触</span><span>被害妄想</span><span>その他の幻覚</span></div>
+        <div id="parameterTrendChart" class="parameter-trend-chart" aria-label="睡眠時間と症状数の推移"></div>
+        <div class="parameter-trend-legend"><span>● 睡眠時間</span><span>● 症状・体験の数</span></div>
       </div>
       <p id="urgeChartNote" class="muted small">データを読み込んでいます…</p>
     </section>
@@ -347,13 +282,10 @@
           <label><input type="checkbox" id="hallucinationOther"> 幻覚（その他）</label>
         </div>
       </div>
-      <div class="parameter-group parameter-note-group">
-        <label for="parameterNote">📝 補足・気づいたこと</label>
-        <p class="parameter-help">その日の体調、気になったこと、症状のきっかけ、周囲の状況などを自由に残せます。</p>
-        <textarea id="parameterNote" rows="6" maxlength="2000" placeholder="例：朝から不安が強かった。昼休みに少し落ち着いた。音が気になったのでイヤフォンを使用した。"></textarea>
-        <div class="parameter-note-meta"><span>最大2000文字</span><span id="parameterNoteCount">0 / 2000</span></div>
+      <div class="parameter-group">
+        <label for="parameterNote">補足</label>
+        <textarea id="parameterNote" rows="5" maxlength="2000" placeholder="今日の状態について自由に入力できます"></textarea>
       </div>
-      <div id="parameterNotePreview" class="parameter-note-preview hidden"></div>
       <button type="button" id="saveParametersBtn" class="parameter-save">💾 その他パラメーターを保存</button>
       <p id="parameterStatus" class="muted small"></p>
     </section>
@@ -375,7 +307,7 @@
     </div>
   </main>
 
-  <footer>Supabase同期版 v0.53</footer>
-  <script type="module" src="app.js?v=0.53"></script>
+  <footer>Supabase同期版 v0.48</footer>
+  <script type="module" src="app.js?v=0.44"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.45";
+const APP_VERSION = "v0.48";
 const SUPABASE_URL = "https://nhyikuzvigfzrcgetxej.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
 let supabaseClient = null;
@@ -29,7 +29,7 @@ const base=[];
 
 let supabaseReady=false, user=null;
 let supabaseOffline=false;
-let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, parameterNoteHistory:[], murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}, reading:[], watching:[], schedule:[]};
+let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}, reading:[]};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
@@ -59,8 +59,6 @@ const MURMUR_CATEGORY="__murmur__";
 const HOBBY_CATEGORY="__hobby__";
 const HOBBY_WORK_CATEGORY="__hobby_work__";
 const READING_CATEGORY="__reading__";
-const WATCHING_CATEGORY="__watching__";
-const SCHEDULE_CATEGORY="__schedule__";
 const DEAR_MASTER_GOAL=100000000;
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
 const URGE_TYPES=[
@@ -404,22 +402,13 @@ async function loadDailyParameters(){
   if(local){
     try{ state.parameters=JSON.parse(local)||state.parameters; }catch{}
   }
-  if(!supabaseReady||!user){
-    state.parameterNoteHistory=Object.keys(localStorage).filter(k=>k.startsWith("dailyParameters:")).map(k=>{
-      try{ const d=JSON.parse(localStorage.getItem(k)||"{}"); return {date:d.date||k.slice(17),note:d.note||""}; }catch{return null;}
-    }).filter(x=>x&&String(x.note).trim());
-    renderDailyParameters();
-    renderReport();
-    return;
-  }
+  if(!supabaseReady||!user){ renderDailyParameters(); return; }
   const res=await supabaseClient.from("custom_rules").select("id,text,category")
     .eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY).order("created_at",{ascending:false});
   if(res.error){console.error(res.error);renderDailyParameters();return;}
-  state.parameterNoteHistory=[];
   for(const row of res.data||[]){
     try{
       const data=JSON.parse(row.text||"{}");
-      if(String(data.note||"").trim()) state.parameterNoteHistory.push({date:data.date||"日付未設定",note:data.note});
       if(data.date===day()){
         state.parameters={sleepHours:data.sleepHours??"",hallucinations:Array.isArray(data.hallucinations)?data.hallucinations:[],note:data.note??""};
         state.parameterRowId=row.id;
@@ -441,7 +430,7 @@ function renderDailyParameters(){
   Object.entries(checks).forEach(([id,label])=>{
     const el=document.getElementById(id); if(el)el.checked=(p.hallucinations||[]).includes(label);
   });
-  const note=document.getElementById("parameterNote"); if(note){note.value=p.note||""; updateParameterNoteUI?.();}
+  const note=document.getElementById("parameterNote"); if(note)note.value=p.note||"";
 }
 
 async function saveDailyParameters(){
@@ -460,7 +449,6 @@ async function saveDailyParameters(){
   if(!supabaseReady||!user){
     const st=document.getElementById("parameterStatus"); if(st)st.textContent="この端末に保存しました。ログインするとクラウド同期できます。";
     await loadParameterTrendHistory();
-    renderReport();
     return;
   }
   let rowId=state.parameterRowId;
@@ -484,11 +472,6 @@ async function saveDailyParameters(){
   if(error){console.error(error);alert(`保存に失敗しました：${error.message}`);return;}
   const st=document.getElementById("parameterStatus"); if(st)st.textContent="☁️ その他パラメーターを保存しました";
   await loadParameterTrendHistory();
-  if(!state.parameterNoteHistory) state.parameterNoteHistory=[];
-  const i=state.parameterNoteHistory.findIndex(x=>x.date===day());
-  if(note){ if(i>=0) state.parameterNoteHistory[i]={date:day(),note}; else state.parameterNoteHistory.push({date:day(),note}); }
-  else if(i>=0) state.parameterNoteHistory.splice(i,1);
-  renderReport();
 }
 
 function getLocalMurmurs(){
@@ -647,83 +630,6 @@ function initHobby(){
   const btn=document.getElementById("addHobbyWorkBtn"); btn?.addEventListener("click",addHobbyWork); renderHobby();
 }
 
-function getLocalWatching(){ try{return JSON.parse(localStorage.getItem("watchingWorks")||"[]")||[];}catch{return [];} }
-function setLocalWatching(data){ localStorage.setItem("watchingWorks",JSON.stringify(data)); }
-function parseWatchingRow(row){
-  try{const d=JSON.parse(row.text||"{}"); return {id:row.id,title:String(d.title||"作品"),type:d.type||"movie",genre:String(d.genre||"映画"),date:d.date||"",comment:String(d.comment||"")};}
-  catch{return {id:row.id,title:row.text||"作品",type:"movie",genre:"映画",date:"",comment:""};}
-}
-async function loadWatching(){
-  let data=getLocalWatching();
-  if(supabaseReady&&user){
-    try{
-      const res=await supabaseClient.from("custom_rules").select("id,text,category,created_at").eq("user_id",user.id).eq("category",WATCHING_CATEGORY).order("created_at",{ascending:true});
-      if(!res.error) data=(res.data||[]).map(parseWatchingRow);
-    }catch(e){console.warn("鑑賞データ取得失敗",e);}
-  }
-  state.watching=data; setLocalWatching(data); renderWatching();
-}
-function renderWatching(){
-  const list=document.getElementById("watchingList"),count=document.getElementById("watchingCount");
-  if(!list||!count)return;
-  const items=state.watching||[]; count.textContent=`${items.length}作品`; list.innerHTML="";
-  if(!items.length){const e=document.createElement("p");e.className="muted small";e.textContent="まだ鑑賞作品がありません。";list.appendChild(e);return;}
-  items.forEach(item=>{
-    const row=document.createElement("article"); row.className="watching-item";
-    const top=document.createElement("div"); top.className="watching-item-top";
-    const title=document.createElement("h3"); title.textContent=item.title;
-    const badge=document.createElement("span"); badge.className="watching-badge"; badge.textContent=`${item.type==="drama"?"📺 ドラマ":"🎬 映画"}・${item.genre||"映画"}`;
-    top.append(title,badge); row.appendChild(top);
-    const meta=document.createElement("div"); meta.className="watching-meta"; meta.textContent=`ジャンル：${item.genre||"映画"}　｜　鑑賞日：${item.date?item.date.replaceAll("-","/"):"未入力"}`; row.appendChild(meta);
-    const comment=document.createElement("p"); comment.className="watching-comment"; comment.textContent=item.comment||"コメントなし"; row.appendChild(comment);
-    const actions=document.createElement("div"); actions.className="rule-actions watching-actions";
-    const edit=document.createElement("button"); edit.type="button"; edit.className="edit-rule"; edit.textContent="変更"; edit.onclick=()=>editWatching(item.id);
-    const del=document.createElement("button"); del.type="button"; del.className="delete-rule"; del.textContent="削除"; del.onclick=()=>deleteWatching(item.id);
-    actions.append(edit,del); row.appendChild(actions); list.appendChild(row);
-  });
-}
-async function saveWatchingCloud(item){
-  if(!supabaseReady||!user)return true;
-  const payload=JSON.stringify({title:item.title,type:item.type,genre:item.genre||"映画",date:item.date,comment:item.comment});
-  if(String(item.id).startsWith("watching-local-")){
-    const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:payload,category:WATCHING_CATEGORY}).select("id").single();
-    if(res.error) return false; item.id=res.data.id; return true;
-  }
-  const res=await supabaseClient.from("custom_rules").update({text:payload}).eq("id",item.id).eq("user_id",user.id).eq("category",WATCHING_CATEGORY); return !res.error;
-}
-async function addWatching(){
-  const title=document.getElementById("newWatchingTitle")?.value.trim()||"";
-  const type=document.getElementById("newWatchingType")?.value||"movie";
-  const genre=document.getElementById("newWatchingGenre")?.value||"映画";
-  const date=document.getElementById("newWatchingDate")?.value||day();
-  const comment=document.getElementById("newWatchingComment")?.value.trim()||"";
-  if(!title){alert("作品名を入力してください。");return;}
-  const item={id:`watching-local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,title,type,genre,date,comment};
-  state.watching.push(item); setLocalWatching(state.watching); const ok=await saveWatchingCloud(item); if(!ok)console.warn("鑑賞作品のクラウド保存に失敗しました");
-  setLocalWatching(state.watching); renderWatching();
-  ["newWatchingTitle","newWatchingComment"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
-  const d=document.getElementById("newWatchingDate"); if(d)d.value=day();
-}
-async function editWatching(id){
-  const item=state.watching.find(x=>String(x.id)===String(id)); if(!item)return;
-  const title=prompt("作品名を変更してください。",item.title); if(title===null)return;
-  const genre=prompt("ジャンルを入力してください。\n映画 / ドラマ / アニメ / その他",item.genre||"映画"); if(genre===null)return;
-  const date=prompt("鑑賞日をYYYY-MM-DDで入力してください。",item.date||day()); if(date===null)return;
-  const comment=prompt("コメントを変更してください。",item.comment||""); if(comment===null)return;
-  item.title=title.trim()||item.title; item.genre=genre.trim()||"映画"; item.date=date.trim(); item.comment=comment;
-  const ok=await saveWatchingCloud(item); setLocalWatching(state.watching); renderWatching(); if(!ok)alert("クラウドへの変更保存に失敗しました。端末には保存されています。");
-}
-async function deleteWatching(id){
-  const idx=state.watching.findIndex(x=>String(x.id)===String(id)); if(idx<0)return; const item=state.watching[idx];
-  if(!confirm(`「${item.title}」を削除しますか？`))return;
-  if(supabaseReady&&user&&!String(item.id).startsWith("watching-local-")){
-    const res=await supabaseClient.from("custom_rules").delete().eq("id",item.id).eq("user_id",user.id).eq("category",WATCHING_CATEGORY);
-    if(res.error){alert(`削除に失敗しました：${res.error.message}`);return;}
-  }
-  state.watching.splice(idx,1); setLocalWatching(state.watching); renderWatching();
-}
-function initWatching(){document.getElementById("addWatchingBtn")?.addEventListener("click",addWatching);const d=document.getElementById("newWatchingDate");if(d)d.value=day();renderWatching();}
-
 function getLocalReading(){ try{return JSON.parse(localStorage.getItem("readingBooks")||"[]")||[];}catch{return [];} }
 function setLocalReading(data){ localStorage.setItem("readingBooks",JSON.stringify(data)); }
 function calcReadingPercent(book){
@@ -741,116 +647,6 @@ function normalizeReading(data){
     return book;
   });
 }
-
-function getLocalSchedule(){ try{return JSON.parse(localStorage.getItem("scheduleItems")||"[]")||[];}catch{return [];} }
-function setLocalSchedule(data){ localStorage.setItem("scheduleItems",JSON.stringify(data)); }
-function parseScheduleRow(row){
-  try{const d=JSON.parse(row.text||"{}"); return {id:row.id,date:String(d.date||""),time:String(d.time||""),title:String(d.title||"用事"),detail:String(d.detail||""),category:String(d.category||"その他")};}
-  catch{return {id:row.id,date:"",time:"",title:row.text||"用事",detail:"",category:"その他"};}
-}
-function scheduleSort(a,b){
-  const aa=`${a.date||"9999-99-99"}T${a.time||"23:59"}`;
-  const bb=`${b.date||"9999-99-99"}T${b.time||"23:59"}`;
-  return aa.localeCompare(bb) || String(a.title).localeCompare(String(b.title),"ja");
-}
-async function loadSchedule(){
-  let data=getLocalSchedule();
-  if(supabaseReady&&user){
-    try{
-      const res=await supabaseClient.from("custom_rules").select("id,text,category,created_at").eq("user_id",user.id).eq("category",SCHEDULE_CATEGORY).order("created_at",{ascending:true});
-      if(!res.error) data=(res.data||[]).map(parseScheduleRow);
-    }catch(e){console.warn("スケジュール取得失敗",e);}
-  }
-  state.schedule=data; setLocalSchedule(data); renderSchedule(); renderPrioritySchedule();
-}
-function scheduleItemKey(id){ return `schedule:${id}`; }
-async function saveScheduleCloud(item){
-  if(!supabaseReady||!user)return true;
-  const payload=JSON.stringify({date:item.date,time:item.time,title:item.title,detail:item.detail,category:item.category});
-  if(String(item.id).startsWith("schedule-local-")){
-    const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:payload,category:SCHEDULE_CATEGORY}).select("id").single();
-    if(res.error)return false; item.id=res.data.id; return true;
-  }
-  const res=await supabaseClient.from("custom_rules").update({text:payload}).eq("id",item.id).eq("user_id",user.id).eq("category",SCHEDULE_CATEGORY);
-  return !res.error;
-}
-async function addSchedule(){
-  const date=document.getElementById("newScheduleDate")?.value||day();
-  const time=document.getElementById("newScheduleTime")?.value||"";
-  const title=document.getElementById("newScheduleTitle")?.value.trim()||"";
-  const detail=document.getElementById("newScheduleDetail")?.value.trim()||"";
-  const category=document.getElementById("newScheduleCategory")?.value.trim()||"その他";
-  if(!title){alert("用事を入力してください。");return;}
-  const item={id:`schedule-local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,date,time,title,detail,category};
-  state.schedule.push(item); setLocalSchedule(state.schedule); const ok=await saveScheduleCloud(item); setLocalSchedule(state.schedule); renderSchedule(); renderPrioritySchedule(); renderPrioritySchedule();
-  if(!ok)alert("クラウド保存に失敗しました。端末には保存されています。");
-  document.getElementById("newScheduleTitle").value=""; document.getElementById("newScheduleDetail").value=""; document.getElementById("newScheduleCategory").value="";
-}
-async function toggleSchedule(id,checked){
-  state.checks[scheduleItemKey(id)]=checked;
-  if(supabaseReady&&user){
-    const res=await supabaseClient.from("daily_check_states").upsert({user_id:user.id,check_date:day(),item_id:scheduleItemKey(id),checked},{onConflict:"user_id,check_date,item_id"});
-    if(res.error)console.warn("予定完遂状態の保存失敗",res.error);
-  }
-  renderSchedule();
-}
-async function editSchedule(id){
-  const item=state.schedule.find(x=>String(x.id)===String(id)); if(!item)return;
-  const title=prompt("用事を変更してください。",item.title); if(title===null)return;
-  const detail=prompt("詳細を変更してください。",item.detail||""); if(detail===null)return;
-  const date=prompt("日付（YYYY-MM-DD）",item.date||day()); if(date===null)return;
-  const time=prompt("時間（HH:MM）",item.time||""); if(time===null)return;
-  const category=prompt("カテゴリー",item.category||"その他"); if(category===null)return;
-  item.title=title.trim()||item.title; item.detail=detail; item.date=date.trim()||item.date; item.time=time.trim(); item.category=category.trim()||"その他";
-  const ok=await saveScheduleCloud(item); setLocalSchedule(state.schedule); renderSchedule(); renderPrioritySchedule(); if(!ok)alert("クラウドへの変更保存に失敗しました。端末には保存されています。");
-}
-async function deleteSchedule(id){
-  const idx=state.schedule.findIndex(x=>String(x.id)===String(id)); if(idx<0)return; const item=state.schedule[idx];
-  if(!confirm(`「${item.title}」の予定を削除しますか？`))return;
-  if(supabaseReady&&user&&!String(item.id).startsWith("schedule-local-")){
-    const res=await supabaseClient.from("custom_rules").delete().eq("id",item.id).eq("user_id",user.id).eq("category",SCHEDULE_CATEGORY); if(res.error){alert(`削除に失敗しました：${res.error.message}`);return;}
-  }
-  delete state.checks[scheduleItemKey(item.id)];
-  state.schedule.splice(idx,1); setLocalSchedule(state.schedule); renderSchedule(); renderPrioritySchedule();
-}
-function refreshScheduleCategories(){
-  const select=document.getElementById("scheduleCategoryFilter"); if(!select)return;
-  const current=select.value; const cats=[...new Set((state.schedule||[]).map(x=>x.category||"その他"))].sort((a,b)=>a.localeCompare(b,"ja"));
-  select.innerHTML=`<option value="all">すべて</option>`+cats.map(c=>`<option value="${c.replaceAll("&","&amp;").replaceAll('"','&quot;')}">${c}</option>`).join("");
-  if(cats.includes(current))select.value=current;
-}
-function renderSchedule(){
-  const list=document.getElementById("scheduleList"),count=document.getElementById("scheduleCount"); if(!list||!count)return;
-  refreshScheduleCategories(); const filter=document.getElementById("scheduleCategoryFilter")?.value||"all";
-  const all=[...(state.schedule||[])].sort(scheduleSort); const items=filter==="all"?all:all.filter(x=>(x.category||"その他")===filter);
-  count.textContent=`${all.length}件`;
-  list.innerHTML="";
-  if(!items.length){const e=document.createElement("p");e.className="muted small";e.textContent="予定はありません。";list.appendChild(e);return;}
-  items.forEach(item=>{
-    const row=document.createElement("article"); row.className="schedule-item";
-    const top=document.createElement("div"); top.className="schedule-item-top";
-    const left=document.createElement("div"); left.className="schedule-main";
-    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!state.checks[scheduleItemKey(item.id)]; cb.title="予定を完遂として記録"; cb.onchange=()=>toggleSchedule(item.id,cb.checked);
-    const title=document.createElement("div"); title.className="schedule-title"; title.textContent=item.title;
-    if(cb.checked) title.classList.add("schedule-done");
-    const meta=document.createElement("div"); meta.className="schedule-meta"; meta.textContent=`${item.date?item.date.replaceAll("-","/"):"日付未入力"}${item.time?` ${item.time}`:""}　｜　${item.category||"その他"}`;
-    left.append(cb,title,meta); top.append(left);
-    const actions=document.createElement("div"); actions.className="rule-actions";
-    const edit=document.createElement("button"); edit.type="button"; edit.className="edit-rule"; edit.textContent="変更"; edit.onclick=()=>editSchedule(item.id);
-    const del=document.createElement("button"); del.type="button"; del.className="delete-rule"; del.textContent="削除"; del.onclick=()=>deleteSchedule(item.id);
-    actions.append(edit,del); top.append(actions); row.append(top);
-    if(item.detail){const detail=document.createElement("p"); detail.className="schedule-detail"; detail.textContent=item.detail; row.append(detail);}
-    list.appendChild(row);
-  });
-}
-function initSchedule(){
-  document.getElementById("addScheduleBtn")?.addEventListener("click",addSchedule);
-  document.getElementById("scheduleCategoryFilter")?.addEventListener("change",renderSchedule);
-  document.getElementById("clearScheduleFilter")?.addEventListener("click",()=>{const s=document.getElementById("scheduleCategoryFilter");if(s)s.value="all";renderSchedule();});
-  const d=document.getElementById("newScheduleDate"); if(d)d.value=day();
-  renderSchedule();
-}
-
 function renderReading(){
   const list=document.getElementById("readingList"), count=document.getElementById("readingCount");
   if(!list||!count)return; const books=state.reading||[]; count.textContent=`${books.length}作品`; list.innerHTML="";
@@ -986,69 +782,23 @@ async function deleteMurmur(id){
   if(supabaseReady&&user&&!String(id).startsWith("local-")){ try{await supabaseClient.from("custom_rules").delete().eq("id",id).eq("user_id",user.id).eq("category",MURMUR_CATEGORY);}catch{} }
   state.murmurs=state.murmurs.filter(x=>String(x.id)!==String(id)); renderMurmurs(); renderReport();
 }
-function getParameterNoteReports(){
-  const rows=[];
-  const addRow=(date,note)=>{
-    const text=String(note||"").trim();
-    if(text) rows.push({date:date||"日付未設定",note:text});
-  };
-  const localKeys=[];
-  try{
-    for(let i=0;i<localStorage.length;i++){
-      const key=localStorage.key(i)||"";
-      if(key.startsWith("dailyParameters:")){
-        const date=key.slice("dailyParameters:".length);
-        const data=JSON.parse(localStorage.getItem(key)||"{}");
-        addRow(date,data.note);
-      }
-    }
-  }catch{}
-  if(state.parameterNoteHistory&&Array.isArray(state.parameterNoteHistory)){
-    state.parameterNoteHistory.forEach(x=>addRow(x.date,x.note));
-  }
-  const seen=new Set();
-  return rows.filter(x=>{const k=`${x.date}\n${x.note}`; if(seen.has(k))return false; seen.add(k); return true;})
-    .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-}
-
 function renderReport(){
   const list=document.getElementById("reportList");
   const empty=document.getElementById("reportEmpty");
   const count=document.getElementById("reportCount");
   if(!list||!empty||!count)return;
-  const murmurs=(state.murmurs||[]).filter(x=>Number(x.mood)>=6);
-  const notes=getParameterNoteReports();
-  const total=murmurs.length+notes.length;
-  count.textContent=`${total}件`;
+  const items=(state.murmurs||[]).filter(x=>Number(x.mood)>=6);
+  count.textContent=`${items.length}件`;
   list.innerHTML="";
-  empty.style.display=total?"none":"block";
-
-  const entries=[
-    ...murmurs.map(item=>({type:"murmur",date:item.date||"日付未設定",time:item.createdAt||"",item})),
-    ...notes.map(item=>({type:"parameter",date:item.date,time:"",item}))
-  ].sort((a,b)=>{
-    const ad=`${a.date} ${a.time}`.trim(), bd=`${b.date} ${b.time}`.trim();
-    return bd.localeCompare(ad);
-  });
-
-  entries.forEach((entry,index)=>{
-    const article=document.createElement("article");
-    article.className=entry.type==="parameter"?"report-entry parameter-report-entry":"report-entry";
+  empty.style.display=items.length?"none":"block";
+  items.forEach((item,index)=>{
+    const article=document.createElement("article"); article.className="report-entry";
     const head=document.createElement("div"); head.className="report-entry-head";
-    const date=document.createElement("strong"); date.textContent=`${index+1}. ${entry.date}`;
-    head.appendChild(date);
-    if(entry.type==="murmur"){
-      const mood=document.createElement("span"); mood.className="report-mood"; mood.textContent=`気分 ${entry.item.mood}/10`;
-      head.appendChild(mood);
-    }else{
-      const label=document.createElement("span"); label.className="parameter-report-label"; label.textContent="その他パラメーターの補足";
-      head.appendChild(label);
-    }
-    const body=document.createElement("p");
-    body.className="report-entry-body";
-    body.textContent=entry.type==="parameter"?entry.item.note:(entry.item.text||"");
-    article.append(head,body);
-    list.appendChild(article);
+    const date=document.createElement("strong"); date.textContent=`${index+1}. ${item.date||"日付未設定"}`;
+    const mood=document.createElement("span"); mood.className="report-mood"; mood.textContent=`気分 ${item.mood}/10`;
+    head.append(date,mood);
+    const body=document.createElement("p"); body.className="report-entry-body"; body.textContent=item.text||"";
+    article.append(head,body); list.appendChild(article);
   });
 }
 function printReport(){
@@ -1095,14 +845,12 @@ async function loadCloud(){
   if(cr.error){console.error(cr.error); return;}
   const rows=cr.data||[];
   state.custom=rows
-    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY && x.category!==DAILY_PARAMETER_CATEGORY && x.category!==DAILY_MENTAL_CATEGORY && x.category!==MURMUR_CATEGORY && x.category!==HOBBY_CATEGORY && x.category!==HOBBY_WORK_CATEGORY && x.category!==READING_CATEGORY && x.category!==WATCHING_CATEGORY && x.category!==SCHEDULE_CATEGORY)
+    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY && x.category!==DAILY_PARAMETER_CATEGORY && x.category!==DAILY_MENTAL_CATEGORY)
     .map(x=>({id:x.id,text:x.text,cat:x.category,source:x.source||""}));
   state.priority=rows
     .filter(x=>x.category===PRIORITY_CATEGORY && x.text!==PRIORITY_SENTINEL_TEXT)
     .map(x=>({id:x.id,text:x.text}));
   state.medications=rows.filter(x=>x.category===MEDICATION_CATEGORY).map(parseMedicationRow);
-  await loadWatching();
-  await loadSchedule();
   await loadDailyParameters();
   await loadMurmurs();
   render();
@@ -1196,16 +944,6 @@ async function migrateAnonymousDataTo(targetUserId, anonymousState){
       if(error) throw error;
     }
   }
-
-  for(const item of anonymousState.schedule||[]){
-    const payload=JSON.stringify({date:item.date,time:item.time,title:item.title,detail:item.detail,category:item.category});
-    const {data:existing,error:findError}=await supabaseClient.from("custom_rules").select("id").eq("user_id",targetUserId).eq("category",SCHEDULE_CATEGORY).eq("text",payload).limit(1);
-    if(findError) throw findError;
-    if(!existing?.length){
-      const {error}=await supabaseClient.from("custom_rules").insert({user_id:targetUserId,text:payload,category:SCHEDULE_CATEGORY});
-      if(error) throw error;
-    }
-  }
 }
 
 async function loginExistingAccount(){
@@ -1216,8 +954,7 @@ async function loginExistingAccount(){
   const previousUser=user;
   const previousState={
     checks:{...state.checks},
-    custom:[...(state.custom||[])],
-    schedule:[...(state.schedule||[])]
+    custom:[...(state.custom||[])]
   };
 
   setAnonAuthMessage("ログインしています…");
@@ -1301,7 +1038,7 @@ async function sendPasswordReset(){
 async function logout(){
   const {error}=await supabaseClient.auth.signOut();
   if(error){alert(error.message); return;}
-  user=null; state={checks:{},custom:[],priority:[],medications:[],parameters:{sleepHours:"",hallucinations:[],note:""},parameterRowId:null,murmurs:[],murmurPage:1,hobby:{dearMaster:"",works:[]},reading:[],watching:[],schedule:[]};
+  user=null; state={checks:{},custom:[],priority:[],medications:[],parameters:{sleepHours:"",hallucinations:[],note:""},parameterRowId:null,murmurs:[],murmurPage:1};
   setStatus("ログアウトしました");
   accountStatus.textContent="ログアウトしました。再ログインは次のログイン画面から行えます。";
   signOutBtn.classList.add("hidden");
@@ -1435,110 +1172,70 @@ function renderUrgeChart(points){
   const chart=document.getElementById("urgeChart");
   if(!chart)return;
   chart.innerHTML="";
-  const width=Math.max(760, points.length*72), height=260;
-  const pad={l:34,r:12,t:18,b:38};
-  const innerW=width-pad.l-pad.r, innerH=height-pad.t-pad.b;
-  const ns="http://www.w3.org/2000/svg";
-  const svg=document.createElementNS(ns,"svg");
-  svg.setAttribute("viewBox",`0 0 ${width} ${height}`); svg.setAttribute("width","100%"); svg.setAttribute("height",String(height));
-  svg.setAttribute("role","img"); svg.setAttribute("aria-label","心の状態6パラメーターの推移");
-
-  for(let level=0; level<=10; level+=2){
-    const y=pad.t+(10-level)/10*innerH;
-    const line=document.createElementNS(ns,"line"); line.setAttribute("x1",pad.l); line.setAttribute("x2",width-pad.r); line.setAttribute("y1",y); line.setAttribute("y2",y); line.setAttribute("stroke","#e5e7eb"); line.setAttribute("stroke-width","1"); svg.appendChild(line);
-    const txt=document.createElementNS(ns,"text"); txt.setAttribute("x",pad.l-8); txt.setAttribute("y",y+4); txt.setAttribute("text-anchor","end"); txt.setAttribute("font-size","10"); txt.setAttribute("fill","#6b7280"); txt.textContent=String(level); svg.appendChild(txt);
-  }
-
-  const palette={vanish:"#b57499",die:"#b85d61",mood:"#4f46e5",anxiety:"#0f766e",irritability:"#d97706",fatigue:"#64748b"};
-  URGE_TYPES.forEach(type=>{
-    const pts=[];
-    points.forEach((point,i)=>{
-      const n=point[type.id];
-      if(n===null||n===undefined||n===""||!Number.isFinite(Number(n))) return;
-      const x=points.length===1?pad.l+innerW/2:pad.l+(i/(points.length-1))*innerW;
-      const y=pad.t+(10-Number(n))/10*innerH;
-      pts.push({x,y,n:Number(n)});
-    });
-    if(!pts.length)return;
-    const path=document.createElementNS(ns,"path");
-    path.setAttribute("d",pts.map((p,i)=>(i?"L":"M")+`${p.x},${p.y}`).join(" "));
-    path.setAttribute("fill","none"); path.setAttribute("stroke",palette[type.id]); path.setAttribute("stroke-width","3"); path.setAttribute("stroke-linecap","round"); path.setAttribute("stroke-linejoin","round"); svg.appendChild(path);
-    pts.forEach(p=>{
-      const c=document.createElementNS(ns,"circle"); c.setAttribute("cx",p.x); c.setAttribute("cy",p.y); c.setAttribute("r","4"); c.setAttribute("fill",palette[type.id]); c.setAttribute("stroke","white"); c.setAttribute("stroke-width","2");
-      const title=document.createElementNS(ns,"title"); title.textContent=`${type.label}: ${p.n}/10`; c.appendChild(title); svg.appendChild(c);
-    });
-  });
-
+  chart.dataset.count=String(points.length);
   const showEvery=points.length>10?5:1;
-  points.forEach((point,i)=>{
-    if(!(i%showEvery===0||i===points.length-1))return;
-    const x=points.length===1?pad.l+innerW/2:pad.l+(i/(points.length-1))*innerW;
-    const txt=document.createElementNS(ns,"text"); txt.setAttribute("x",x); txt.setAttribute("y",height-12); txt.setAttribute("text-anchor","middle"); txt.setAttribute("font-size","10"); txt.setAttribute("fill","#6b7280"); txt.textContent=shortDate(point.date); svg.appendChild(txt);
-  });
-  chart.appendChild(svg);
+  for(let i=0;i<points.length;i++){
+    const point=points[i]||{};
+    const col=document.createElement("div"); col.className="urge-chart-col";
+    const bars=document.createElement("div"); bars.className="urge-bars";
+    URGE_TYPES.forEach(type=>{
+      const raw=point[type.id];
+      const n=(raw===null||raw===undefined||raw==="")?null:Number(raw);
+      const bar=document.createElement("div");
+      bar.className=`urge-bar ${type.id}-bar`;
+      bar.style.height=n!==null && Number.isFinite(n)?`${Math.max(0,Math.min(10,n))*10}%`:'2%';
+      bar.title=`${type.label}: ${n===null?'未記録':n+' / 10'}`;
+      if(n===null) bar.classList.add("unrecorded");
+      bars.appendChild(bar);
+    });
+    const label=document.createElement("span"); label.className="urge-chart-label"; label.textContent=(i%showEvery===0||i===points.length-1)?shortDate(point.date):"";
+    col.append(bars,label); chart.appendChild(col);
+  }
 }
 
 function renderParameterTrend(points){
   const chart=document.getElementById("parameterTrendChart");
   if(!chart)return;
   chart.innerHTML="";
-  const wrap=document.createElement("div"); wrap.className="parameter-trend-table";
-  const headers=["日付","睡眠","幻視","幻聴","幻触","被害妄想","その他の幻覚","補足"];
-  const thead=document.createElement("div"); thead.className="parameter-trend-row parameter-trend-header";
-  headers.forEach(h=>{const el=document.createElement("span"); el.textContent=h; thead.appendChild(el);}); wrap.appendChild(thead);
-  points.forEach(p=>{
-    const row=document.createElement("div"); row.className="parameter-trend-row";
-    const cells=[shortDate(p.date),p.sleep==null?"—":`${p.sleep}h`,p.visual?"✓":"—",p.auditory?"✓":"—",p.tactile?"✓":"—",p.delusion?"✓":"—",p.other?"✓":"—",p.note||"—"];
-    cells.forEach(c=>{const el=document.createElement("span"); el.textContent=c; row.appendChild(el);});
-    wrap.appendChild(row);
-  });
-  chart.appendChild(wrap);
+  chart.dataset.count=String(points.length);
+  const maxSleep=24;
+  const maxSymptoms=5;
+  const showEvery=points.length>10?5:1;
+  for(let i=0;i<points.length;i++){
+    const p=points[i];
+    const col=document.createElement("div"); col.className="parameter-trend-col";
+    const bars=document.createElement("div"); bars.className="parameter-trend-bars";
+    const sleep=document.createElement("div"); sleep.className="parameter-bar sleep-bar"; sleep.style.height=`${Math.max((Number(p.sleep)||0)/maxSleep*100,2)}%`; sleep.title=`睡眠 ${p.sleep==null?"未記録":p.sleep+"時間"}`;
+    const symptoms=document.createElement("div"); symptoms.className="parameter-bar symptom-bar"; symptoms.style.height=`${Math.max((Number(p.symptoms)||0)/maxSymptoms*100,2)}%`; symptoms.title=`症状 ${p.symptoms??0}項目`;
+    bars.append(sleep,symptoms);
+    const label=document.createElement("span"); label.className="parameter-trend-label"; label.textContent=(i%showEvery===0||i===points.length-1)?shortDate(p.date):"";
+    col.append(bars,label); chart.appendChild(col);
+  }
 }
-
 async function loadParameterTrendHistory(days=urgeChartDays){
   const chart=document.getElementById("parameterTrendChart"); if(!chart)return;
   const dates=Array.from({length:days},(_,i)=>dateOffset(i-days+1));
-  const blank=()=>({sleep:null,visual:false,auditory:false,tactile:false,delusion:false,other:false,note:""});
+  const empty=dates.map(date=>({date,sleep:null,symptoms:0}));
+  if(!supabaseReady||!user){
+    const today=state.parameters||{};
+    const point=empty[empty.length-1];
+    if(today.sleepHours!=="")point.sleep=Number(today.sleepHours);
+    point.symptoms=(today.hallucinations||[]).length;
+    renderParameterTrend(empty); return;
+  }
+  const {data,error}=await supabaseClient.from("custom_rules").select("id,text,category")
+    .eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY).order("created_at");
+  if(error){console.error(error);return;}
   const byDate={};
-  for(const date of dates){
-    const raw=localStorage.getItem(`dailyParameters:${date}`);
-    if(raw){try{byDate[date]={...blank(),...JSON.parse(raw)}}catch{}}
+  for(const row of data||[]){
+    try{
+      const d=JSON.parse(row.text||"{}");
+      if(!dates.includes(d.date))continue;
+      byDate[d.date]={date:d.date,sleep:d.sleepHours===""||d.sleepHours==null?null:Number(d.sleepHours),symptoms:Array.isArray(d.hallucinations)?d.hallucinations.length:0};
+    }catch{}
   }
-  const today=day();
-  if(!byDate[today] && state.parameters){
-    byDate[today]={
-      ...blank(),
-      sleep:state.parameters.sleepHours===""?null:Number(state.parameters.sleepHours),
-      visual:(state.parameters.hallucinations||[]).includes("幻視"),
-      auditory:(state.parameters.hallucinations||[]).includes("幻聴"),
-      tactile:(state.parameters.hallucinations||[]).includes("幻触"),
-      delusion:(state.parameters.hallucinations||[]).includes("被害妄想"),
-      other:(state.parameters.hallucinations||[]).includes("幻覚"),
-      note:state.parameters.note||""
-    };
-  }
-  if(supabaseReady&&user){
-    const {data,error}=await supabaseClient.from("custom_rules").select("id,text,category").eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY).order("created_at");
-    if(!error){
-      for(const row of data||[]){
-        try{
-          const d=JSON.parse(row.text||"{}");
-          if(!d.date||!dates.includes(d.date))continue;
-          byDate[d.date]={
-            ...blank(),
-            sleep:d.sleepHours===""||d.sleepHours==null?null:Number(d.sleepHours),
-            visual:(d.hallucinations||[]).includes("幻視"),
-            auditory:(d.hallucinations||[]).includes("幻聴"),
-            tactile:(d.hallucinations||[]).includes("幻触"),
-            delusion:(d.hallucinations||[]).includes("被害妄想"),
-            other:(d.hallucinations||[]).includes("幻覚"),
-            note:d.note||""
-          };
-        }catch{}
-      }
-    }
-  }
-  renderParameterTrend(dates.map(date=>({date,...(byDate[date]||blank())})));
+  const points=dates.map(date=>byDate[date]||{date,sleep:null,symptoms:0});
+  renderParameterTrend(points);
 }
 
 async function loadUrgeHistory(days=urgeChartDays){
@@ -1670,31 +1367,7 @@ function renderUrges(){
   }
 }
 
-function renderPrioritySchedule(){
-  const wrap=document.getElementById("priorityScheduleList");
-  if(!wrap)return;
-  wrap.innerHTML="";
-  const today=day();
-  const upcoming=[...(state.schedule||[])].filter(item=>item.date===today).sort(scheduleSort);
-  if(!upcoming.length){
-    const empty=document.createElement("div"); empty.className="priority-schedule-empty";
-    empty.textContent="今日は登録されている予定はありません。"; wrap.appendChild(empty); return;
-  }
-  upcoming.forEach(item=>{
-    const row=document.createElement("div"); row.className="priority-schedule-item";
-    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!state.checks[scheduleItemKey(item.id)];
-    cb.onchange=()=>toggleSchedule(item.id,cb.checked);
-    const body=document.createElement("div"); body.className="priority-schedule-body";
-    const title=document.createElement("div"); title.className="priority-schedule-title";
-    title.textContent=`${item.time?item.time+"　":""}${item.title}`;
-    if(cb.checked) title.classList.add("schedule-done");
-    const meta=document.createElement("div"); meta.className="priority-schedule-meta"; meta.textContent=item.category||"その他";
-    body.append(title,meta); row.append(cb,body); wrap.appendChild(row);
-  });
-}
-
 function renderPriority(){
-  renderPrioritySchedule();
   const wrap=document.getElementById("priorityList");
   if(!wrap)return;
   wrap.innerHTML="";
@@ -1768,6 +1441,7 @@ async function loadAchievementHistory(){
 function renderAchievementChart(points){
   const chart=document.getElementById("achievementChart"); if(!chart)return;
   chart.innerHTML="";
+  chart.dataset.count=String(points.length);
   for(const point of points){
     const col=document.createElement("div"); col.className="chart-col";
     const value=document.createElement("span"); value.className="chart-value"; value.textContent=`${point.rate}%`;
@@ -1844,8 +1518,6 @@ const murmurTab=document.getElementById("murmurTab");
 const reportTab=document.getElementById("reportTab");
 const hobbyTab=document.getElementById("hobbyTab");
 const readingTab=document.getElementById("readingTab");
-const watchingTab=document.getElementById("watchingTab");
-const scheduleTab=document.getElementById("scheduleTab");
 const categoriesEl=document.getElementById("categories");
 const addRulesEl=document.querySelector("section.add");
 if(checksheetTab && categoriesEl && addRulesEl){
@@ -1860,8 +1532,6 @@ function switchAppTab(name){
   reportTab?.classList.toggle("active",name==="report");
   hobbyTab?.classList.toggle("active",name==="hobby");
   readingTab?.classList.toggle("active",name==="reading");
-  watchingTab?.classList.toggle("active",name==="watching");
-  scheduleTab?.classList.toggle("active",name==="schedule");
 }
 document.querySelectorAll(".app-tab").forEach(btn=>btn.addEventListener("click",()=>switchAppTab(btn.dataset.tab)));
 switchAppTab("record");
@@ -1874,7 +1544,6 @@ function refreshCategoryOptions(){
   const unique=[...new Set(names)].filter(x=>x && !["__custom__","__system__","__priority__","__medication__","__daily_parameters__","__daily_mental__"].includes(x));
   select.innerHTML=unique.map(x=>`<option value="${x.replaceAll('"','&quot;')}">${x}</option>`).join("")+`<option value="__custom__">✏️ 自由入力</option>`;
   if([...select.options].some(o=>o.value===current)) select.value=current;
-  syncCategoryCustomInput(false);
 }
 
 document.getElementById("date").textContent=new Intl.DateTimeFormat("ja-JP",{dateStyle:"full"}).format(new Date());
@@ -1882,7 +1551,6 @@ initUrgeChartTabs();
 initReading();
 loadReading();
 initMurmurs();
-initSchedule();
 initReport();
 initHobby();
 loadHobby();
@@ -1910,16 +1578,11 @@ document.getElementById("addPriorityBtn").onclick=async()=>{
 
 const categorySelect=document.getElementById("newCategory");
 const categoryCustom=document.getElementById("newCategoryCustom");
-function syncCategoryCustomInput(focus=false){
-  if(!categorySelect||!categoryCustom)return;
+categorySelect.onchange=()=>{
   const custom=categorySelect.value==="__custom__";
   categoryCustom.style.display=custom?"block":"none";
-  categoryCustom.disabled=!custom;
-  categoryCustom.setAttribute("aria-hidden",custom?"false":"true");
-  if(custom && focus) setTimeout(()=>categoryCustom.focus(),0);
-}
-categorySelect.onchange=()=>syncCategoryCustomInput(true);
-syncCategoryCustomInput(false);
+  if(custom) categoryCustom.focus();
+};
 categoryCustom.addEventListener("keydown",e=>{
   if(e.key==="Enter") document.getElementById("addBtn").click();
 });
@@ -1945,24 +1608,9 @@ document.getElementById("addBtn").onclick=async()=>{
   }
 };
 
-initWatching();
-const parameterNoteInput=document.getElementById("parameterNote");
-const parameterNoteCount=document.getElementById("parameterNoteCount");
-const parameterNotePreview=document.getElementById("parameterNotePreview");
-function updateParameterNoteUI(){
-  const text=parameterNoteInput?.value||"";
-  if(parameterNoteCount) parameterNoteCount.textContent=`${text.length} / 2000`;
-  if(parameterNotePreview){
-    parameterNotePreview.textContent=text.trim()?`今日の補足：${text.trim()}`:"";
-    parameterNotePreview.classList.toggle("hidden",!text.trim());
-  }
-}
-parameterNoteInput?.addEventListener("input",updateParameterNoteUI);
-updateParameterNoteUI();
-document.getElementById("saveParametersBtn").onclick=async()=>{await saveDailyParameters();updateParameterNoteUI();};
-document.getElementById("openScheduleTabBtn")?.addEventListener("click",()=>switchAppTab("schedule"));
+document.getElementById("saveParametersBtn").onclick=saveDailyParameters;
 document.getElementById("saveUrgesBtn").onclick=saveUrges;
-document.getElementById("printBtn").onclick=()=>window.print();
+document.getElementById("printBtn").onclick=()=>{switchAppTab("record"); requestAnimationFrame(()=>window.print());};
 
 document.getElementById("resetBtn").onclick=async()=>{
   if(!confirm("今日のチェックをすべて未チェックにしますか？"))return;
