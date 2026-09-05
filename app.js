@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.53";
+const APP_VERSION = "v0.54";
 const SUPABASE_URL = "https://nhyikuzvigfzrcgetxej.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
 let supabaseClient = null;
@@ -820,31 +820,30 @@ async function deleteMurmur(id){
   if(supabaseReady&&user&&!String(id).startsWith("local-")){ try{await supabaseClient.from("custom_rules").delete().eq("id",id).eq("user_id",user.id).eq("category",MURMUR_CATEGORY);}catch{} }
   state.murmurs=state.murmurs.filter(x=>String(x.id)!==String(id)); renderMurmurs(); renderReport();
 }
+function reportEntries(){
+  return [
+    ...(state.murmurs||[]).filter(x=>Number(x.mood)>=6).map(item=>({kind:"murmur",date:item.date||"9999-12-31",item})),
+    ...(state.parameterHistory||[]).filter(x=>String(x.note||"").trim()).map(item=>({kind:"note",date:item.date||"9999-12-31",item}))
+  ].sort((a,b)=>a.date.localeCompare(b.date)||(a.kind==="murmur"?-1:1));
+}
 function renderReport(){
   const list=document.getElementById("reportList");
   const empty=document.getElementById("reportEmpty");
   const count=document.getElementById("reportCount");
   if(!list||!empty||!count)return;
-  const items=(state.murmurs||[]).filter(x=>Number(x.mood)>=6);
-  const notes=(state.parameterHistory||[]).filter(x=>String(x.note||"").trim()).slice().reverse();
-  count.textContent=`呟き ${items.length}件・補足 ${notes.length}件`;
+  const entries=reportEntries();
+  const murmurCount=entries.filter(x=>x.kind==="murmur").length;
+  const noteCount=entries.length-murmurCount;
+  count.textContent=`呟き ${murmurCount}件・補足 ${noteCount}件`;
   list.innerHTML="";
-  empty.style.display=(items.length||notes.length)?"none":"block";
-  items.forEach((item,index)=>{
-    const article=document.createElement("article"); article.className="report-entry";
-    const head=document.createElement("div"); head.className="report-entry-head";
-    const date=document.createElement("strong"); date.textContent=`${index+1}. ${item.date||"日付未設定"}`;
-    const mood=document.createElement("span"); mood.className="report-mood"; mood.textContent=`気分 ${item.mood}/10`;
-    head.append(date,mood);
-    const body=document.createElement("p"); body.className="report-entry-body"; body.textContent=item.text||"";
-    article.append(head,body); list.appendChild(article);
-  });
-  notes.forEach((item,index)=>{
-    const article=document.createElement("article");article.className="report-entry parameter-note-report";
+  empty.style.display=entries.length?"none":"block";
+  entries.forEach((entry,index)=>{
+    const item=entry.item;const article=document.createElement("article");article.className=`report-entry${entry.kind==="note"?" parameter-note-report":""}`;
     const head=document.createElement("div");head.className="report-entry-head";
-    const date=document.createElement("strong");date.textContent=`補足 ${index+1}. ${item.date||"日付未設定"}`;
-    const badge=document.createElement("span");badge.className="parameter-note-badge";badge.textContent="その他パラメーター";
-    head.append(date,badge);const body=document.createElement("p");body.className="report-entry-body";body.textContent=item.note;article.append(head,body);list.appendChild(article);
+    const date=document.createElement("strong");date.textContent=`${index+1}. ${item.date||"日付未設定"}`;
+    const badge=document.createElement("span");
+    if(entry.kind==="murmur"){badge.className="report-mood";badge.textContent=`気分 ${item.mood}/10`;}else{badge.className="parameter-note-badge";badge.textContent="その他パラメーター";}
+    head.append(date,badge);const body=document.createElement("p");body.className="report-entry-body";body.textContent=entry.kind==="murmur"?(item.text||""):(item.note||"");article.append(head,body);list.appendChild(article);
   });
 }
 function printReport(){
@@ -872,16 +871,15 @@ async function buildMedicalPrintSummary(){
     const rows=symptoms?.querySelectorAll(".symptom-row")||[];
     rows.forEach(r=>{const rr=document.createElement("div");rr.className="medical-symptom-row";rr.innerHTML=r.innerHTML;tHost.appendChild(rr);});
   }
-  const items=(state.murmurs||[]).filter(x=>Number(x.mood)>=6);
-  const notes=(state.parameterHistory||[]).filter(x=>String(x.note||"").trim()).slice().reverse();
-  const r=document.getElementById("medicalReportList"); if(r){r.innerHTML="";items.forEach((item,i)=>{const row=document.createElement("div");row.className="medical-report-entry";row.innerHTML=`<strong>${i+1}. ${item.date||"日付未設定"}　気分 ${item.mood}/10</strong><div>${escapeHtml(item.text||"")}</div>`;r.appendChild(row);});notes.forEach((item,i)=>{const row=document.createElement("div");row.className="medical-report-entry medical-parameter-note";row.innerHTML=`<strong>その他パラメーターの補足 ${i+1}. ${item.date||"日付未設定"}</strong><div>${escapeHtml(item.note)}</div>`;r.appendChild(row);});}
+  const entries=reportEntries();
+  const r=document.getElementById("medicalReportList");if(r){r.innerHTML="";entries.forEach((entry,i)=>{const item=entry.item,row=document.createElement("div");row.className=`medical-report-entry${entry.kind==="note"?" medical-parameter-note":""}`;const title=entry.kind==="murmur"?`${i+1}. ${item.date||"日付未設定"}　気分 ${item.mood}/10`:`${i+1}. ${item.date||"日付未設定"}　その他パラメーターの補足`;const body=entry.kind==="murmur"?(item.text||""):(item.note||"");row.innerHTML=`<strong>${title}</strong><div>${escapeHtml(body)}</div>`;r.appendChild(row);});}
   const range=document.getElementById("medicalRange"); if(range) range.textContent=`対象期間：${dates[0]} ～ ${dates[dates.length-1]}`;
 }
 function escapeHtml(value){return String(value).replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));}
 function printMedicalSummary(){
   document.body.classList.add("printing-medical");
   document.title=`医療共有用_心身状態報告_${day()}`;
-  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.53";},120));
+  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.54";},120));
 }
 
 function initReport(){
