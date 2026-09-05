@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.50";
+const APP_VERSION = "v0.51";
 const SUPABASE_URL = "https://nhyikuzvigfzrcgetxej.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
 let supabaseClient = null;
@@ -63,12 +63,12 @@ const READING_CATEGORY="__reading__";
 const DEAR_MASTER_GOAL=100000000;
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
 const URGE_TYPES=[
-  {id:"vanish",label:"消えたい衝動"},
-  {id:"die",label:"死にたい衝動"},
-  {id:"mood",label:"気分"},
-  {id:"anxiety",label:"不安"},
-  {id:"irritability",label:"イライラ"},
-  {id:"fatigue",label:"疲労感"}
+  {id:"vanish",label:"消えたい衝動",color:"#7c3aed"},
+  {id:"die",label:"死にたい衝動",color:"#dc2626"},
+  {id:"mood",label:"気分",color:"#d97706"},
+  {id:"anxiety",label:"不安",color:"#2563eb"},
+  {id:"irritability",label:"イライラ",color:"#db2777"},
+  {id:"fatigue",label:"疲労感",color:"#059669"}
 ];
 const day=()=>{
   const d=new Date();
@@ -872,7 +872,7 @@ function escapeHtml(value){return String(value).replace(/[&<>'"]/g,ch=>({'&':'&a
 function printMedicalSummary(){
   document.body.classList.add("printing-medical");
   document.title=`医療共有用_心身状態報告_${day()}`;
-  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.50";},120));
+  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.51";},120));
 }
 
 function initReport(){
@@ -1242,24 +1242,18 @@ function renderUrgeChart(points){
   if(!chart)return;
   chart.innerHTML="";
   chart.dataset.count=String(points.length);
-  const showEvery=points.length>10?5:1;
-  for(let i=0;i<points.length;i++){
-    const point=points[i]||{};
-    const col=document.createElement("div"); col.className="urge-chart-col";
-    const bars=document.createElement("div"); bars.className="urge-bars";
-    URGE_TYPES.forEach(type=>{
-      const raw=point[type.id];
-      const n=(raw===null||raw===undefined||raw==="")?null:Number(raw);
-      const bar=document.createElement("div");
-      bar.className=`urge-bar ${type.id}-bar`;
-      bar.style.height=n!==null && Number.isFinite(n)?`${Math.max(0,Math.min(10,n))*10}%`:'2%';
-      bar.title=`${type.label}: ${n===null?'未記録':n+' / 10'}`;
-      if(n===null) bar.classList.add("unrecorded");
-      bars.appendChild(bar);
-    });
-    const label=document.createElement("span"); label.className="urge-chart-label"; label.textContent=(i%showEvery===0||i===points.length-1)?shortDate(point.date):"";
-    col.append(bars,label); chart.appendChild(col);
+  const ns="http://www.w3.org/2000/svg",width=1000,height=310,left=48,right=18,top=16,bottom=48,plotW=width-left-right,plotH=height-top-bottom;
+  const svg=document.createElementNS(ns,"svg");svg.setAttribute("class","mental-line-svg");svg.setAttribute("viewBox",`0 0 ${width} ${height}`);svg.setAttribute("role","img");svg.setAttribute("aria-label","心の状態の推移。縦軸は0から10、6項目を色別の折れ線で表示しています。");
+  const y=value=>top+plotH-(value/10)*plotH,x=index=>points.length<=1?left+plotW/2:left+(plotW/(points.length-1))*index;
+  for(let value=0;value<=10;value+=2){const grid=document.createElementNS(ns,"line");grid.setAttribute("x1",left);grid.setAttribute("x2",width-right);grid.setAttribute("y1",y(value));grid.setAttribute("y2",y(value));grid.setAttribute("class","mental-grid-line");svg.appendChild(grid);const label=document.createElementNS(ns,"text");label.setAttribute("x",left-10);label.setAttribute("y",y(value)+4);label.setAttribute("text-anchor","end");label.setAttribute("class","mental-axis-label");label.textContent=String(value);svg.appendChild(label);}
+  const axis=document.createElementNS(ns,"line");axis.setAttribute("x1",left);axis.setAttribute("x2",width-right);axis.setAttribute("y1",y(0));axis.setAttribute("y2",y(0));axis.setAttribute("class","mental-axis-line");svg.appendChild(axis);
+  const showEvery=points.length>10?5:1;points.forEach((point,index)=>{if(index%showEvery!==0&&index!==points.length-1)return;const label=document.createElementNS(ns,"text");label.setAttribute("x",x(index));label.setAttribute("y",height-17);label.setAttribute("text-anchor","middle");label.setAttribute("class","mental-axis-label mental-date-label");label.textContent=shortDate(point.date);svg.appendChild(label);});
+  for(const type of URGE_TYPES){
+    let segment=[];const drawSegment=()=>{if(!segment.length)return;const line=document.createElementNS(ns,"polyline");line.setAttribute("points",segment.map(p=>`${x(p.index)},${y(p.value)}`).join(" "));line.setAttribute("fill","none");line.setAttribute("stroke",type.color);line.setAttribute("stroke-width","3.5");line.setAttribute("stroke-linecap","round");line.setAttribute("stroke-linejoin","round");line.setAttribute("class","mental-line");svg.appendChild(line);segment=[];};
+    points.forEach((point,index)=>{const raw=point?.[type.id],value=(raw===null||raw===undefined||raw==="")?null:Number(raw);if(value===null||!Number.isFinite(value)){drawSegment();return;}segment.push({index,value:Math.max(0,Math.min(10,value))});});drawSegment();
+    points.forEach((point,index)=>{const raw=point?.[type.id],value=(raw===null||raw===undefined||raw==="")?null:Number(raw);if(value===null||!Number.isFinite(value))return;const dot=document.createElementNS(ns,"circle");dot.setAttribute("cx",x(index));dot.setAttribute("cy",y(Math.max(0,Math.min(10,value))));dot.setAttribute("r",points.length>10?3.6:4.4);dot.setAttribute("fill",type.color);dot.setAttribute("class","mental-dot");const title=document.createElementNS(ns,"title");title.textContent=`${point.date}　${type.label}: ${value} / 10`;dot.appendChild(title);svg.appendChild(dot);});
   }
+  chart.appendChild(svg);
 }
 
 function renderParameterTrend(points){
