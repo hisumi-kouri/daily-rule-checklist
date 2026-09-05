@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#4f46e5">
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=0.51">
-  <title>毎日のルールチェック v0.51</title>
+  <link rel="stylesheet" href="style.css?v=0.52">
+  <title>毎日のルールチェック v0.52</title>
 </head>
 <body>
   <header>
@@ -145,21 +145,21 @@
         <div id="medicalSymptomTable" class="medical-table"></div>
       </section>
       <section class="medical-section">
-        <h2>4. 報告（気分6以上の呟き）</h2>
+        <h2>4. 報告（気分6以上の呟き・その他パラメーターの補足）</h2>
         <div id="medicalReportList" class="medical-report-list"></div>
       </section>
     </section>
 
     <div id="reportTab" class="tab-panel">
       <section class="card report-head">
-        <div class="section-head"><div><h2>📝 報告書</h2><p class="muted">「呟き」のうち、気分が6以上の記録を自動でまとめます。</p></div><span id="reportCount" class="muted small">0件</span></div>
+        <div class="section-head"><div><h2>📝 報告書</h2><p class="muted">気分が6以上の呟きと、その他パラメーターの補足を自動でまとめます。</p></div><span id="reportCount" class="muted small">0件</span></div>
         <div class="report-actions">
           <button type="button" id="refreshReportBtn" class="secondary">🔄 報告を更新</button>
           <button type="button" id="printReportBtn" class="parameter-save">🖨️ 報告書を印刷 / PDF</button>
         </div>
       </section>
       <section class="card report-card">
-        <div id="reportEmpty" class="muted small">気分6以上の呟きはありません。</div>
+        <div id="reportEmpty" class="muted small">報告に表示する呟き・補足はありません。</div>
         <div id="reportList" class="report-list"></div>
       </section>
     </div>
@@ -360,7 +360,7 @@
     </div>
   </main>
 
-  <footer>Supabase同期版 v0.51</footer>
-  <script type="module" src="app.js?v=0.51"></script>
+  <footer>Supabase同期版 v0.52</footer>
+  <script type="module" src="app.js?v=0.52"></script>
 </body>
 </html>
