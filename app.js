@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.52";
+const APP_VERSION = "v0.53";
 const SUPABASE_URL = "https://nhyikuzvigfzrcgetxej.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
 let supabaseClient = null;
@@ -881,7 +881,7 @@ function escapeHtml(value){return String(value).replace(/[&<>'"]/g,ch=>({'&':'&a
 function printMedicalSummary(){
   document.body.classList.add("printing-medical");
   document.title=`医療共有用_心身状態報告_${day()}`;
-  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.52";},120));
+  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.53";},120));
 }
 
 function initReport(){
@@ -1639,7 +1639,7 @@ function switchAppTab(name){
   readingTab?.classList.toggle("active",name==="reading");
 }
 document.querySelectorAll(".app-tab").forEach(btn=>btn.addEventListener("click",()=>switchAppTab(btn.dataset.tab)));
-switchAppTab("record");
+switchAppTab("schedule");
 const checksheetDate=document.getElementById("checksheetDate");
 if(checksheetDate) checksheetDate.textContent=new Intl.DateTimeFormat("ja-JP",{dateStyle:"full"}).format(new Date());
 function refreshCategoryOptions(){

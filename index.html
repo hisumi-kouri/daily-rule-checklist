@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#4f46e5">
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=0.52">
-  <title>毎日のルールチェック v0.52</title>
+  <link rel="stylesheet" href="style.css?v=0.53">
+  <title>毎日のルールチェック v0.53</title>
 </head>
 <body>
   <header>
@@ -21,9 +21,9 @@
   </header>
 
   <nav class="app-tabs" aria-label="アプリ内メニュー">
-    <button type="button" class="app-tab active" data-tab="record">📊 記録・分析</button>
+    <button type="button" class="app-tab" data-tab="record">📊 記録・分析</button>
     <button type="button" class="app-tab" data-tab="checksheet">📋 今日のチェックシート</button>
-    <button type="button" class="app-tab" data-tab="schedule">🗓️ スケジュール</button>
+    <button type="button" class="app-tab active" data-tab="schedule">🗓️ 今日のスケジュール</button>
     <button type="button" class="app-tab" data-tab="murmur">💭 呟き</button>
     <button type="button" class="app-tab" data-tab="report">📝 報告</button>
     <button type="button" class="app-tab" data-tab="hobby">🎨 趣味</button>
@@ -36,7 +36,7 @@
         <div class="section-head"><div><h2>📋 今日のチェックシート</h2><p class="muted">基本・生活・職場・今日の振り返りに分けて確認します。</p></div><span id="checksheetDate" class="muted small"></span></div>
       </section>
     </div>
-    <div id="scheduleTab" class="tab-panel">
+    <div id="scheduleTab" class="tab-panel active">
       <section class="card schedule-head">
         <div class="section-head"><div><h2>🗓️ スケジュール</h2><p class="muted">予定を日付・時刻ごとに整理して、終わったものは完了にできます。</p></div><span id="scheduleCount" class="muted small">0件</span></div>
       </section>
@@ -360,7 +360,7 @@
     </div>
   </main>
 
-  <footer>Supabase同期版 v0.52</footer>
-  <script type="module" src="app.js?v=0.52"></script>
+  <footer>Supabase同期版 v0.53</footer>
+  <script type="module" src="app.js?v=0.53"></script>
 </body>
 </html>
