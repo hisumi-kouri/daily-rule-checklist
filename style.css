@@ -207,7 +207,7 @@ footer{color:#9b8f85}
 .reading-head{border-left:4px solid #8b6f5a}.reading-card{border-left-color:#8b6f5a}.reading-list{display:grid;gap:12px}.reading-book-card{border:1px solid rgba(111,78,55,.14);border-radius:18px;padding:16px;background:rgba(255,255,255,.7);box-shadow:0 8px 20px rgba(111,78,55,.06)}.reading-book-top{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:800}.reading-book-top input{width:20px;height:20px;accent-color:#7c9a86}.reading-book-title{flex:1}.reading-book-meta{margin:8px 0 4px;font-size:13px;color:#7c6657}.reading-page-meta{font-size:13px;color:#6f5c50;margin-bottom:10px}.reading-progress-head{display:flex;justify-content:space-between;gap:12px;font-size:13px;margin-bottom:6px}.reading-progress-wrap input[type=range]{width:100%;accent-color:#7c9a86}.reading-actions{margin-top:10px}.reading-add-form{display:grid;grid-template-columns:1.3fr 1fr 1fr 140px 140px auto;gap:10px}.reading-add-form input{min-width:0}@media(max-width:900px){.reading-add-form{grid-template-columns:1fr 1fr}.reading-add-form button{grid-column:1/-1}}@media(max-width:620px){.reading-add-form{grid-template-columns:1fr}}
 
 
-/* v0.48 fixed A4 print layout */
+/* v0.49 fixed A4 print layout */
 @page{size:A4 portrait;margin:10mm}
 @media print{
   html,body{width:190mm!important;min-width:190mm!important;max-width:190mm!important;margin:0 auto!important;padding:0!important;background:#fff!important;overflow:visible!important;font-size:11pt!important;line-height:1.45!important}
@@ -254,4 +254,31 @@ footer{color:#9b8f85}
   body.printing-report main{width:190mm!important;max-width:190mm!important}
   body.printing-report #recordTab{display:none!important}
   body.printing-report #reportTab{display:block!important}
+}
+/* v0.49 medical readability */
+.symptom-timeline-block{margin-top:18px;padding-top:14px;border-top:1px solid #eadfd4}.symptom-timeline{display:grid;gap:6px;margin-top:8px}.symptom-row{display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:start;padding:7px 10px;border:1px solid #efe4da;border-radius:9px;background:#fffaf6;font-size:12px}.symptom-row strong{color:#6f5c50}.symptom-none{color:#9b8b80}.medical-print-summary{display:none}
+.medical-chart-host .urge-chart,.medical-chart-host .parameter-trend-chart{overflow:visible!important}
+@media print{
+  body.printing-medical #recordTab,body.printing-medical header,body.printing-medical .app-tabs,body.printing-medical footer{display:none!important}
+  body.printing-medical #medicalPrintSummary{display:block!important;width:190mm!important;max-width:190mm!important;margin:0 auto!important;background:#fff!important;color:#222!important}
+  body.printing-medical main{width:190mm!important;max-width:190mm!important;margin:0 auto!important;padding:0!important}
+  .medical-title{font-size:19pt;font-weight:800;margin:0 0 2mm}
+  .medical-range{font-size:9pt;color:#665a54;margin-bottom:5mm}
+  .medical-section{margin:0 0 5mm;padding:4mm;border:1px solid #dfd2c7;border-radius:3mm;break-inside:avoid-page;page-break-inside:avoid}
+  .medical-section h2{font-size:12pt;margin:0 0 3mm;color:#59483e}
+  .medical-chart-host .urge-chart{height:58mm!important;display:grid!important;grid-template-columns:repeat(30,minmax(0,1fr))!important;gap:.35mm!important;padding:2mm!important}
+  .medical-chart-host .urge-chart .urge-chart-col{min-width:0!important;width:auto!important;height:100%!important}
+  .medical-chart-host .urge-bars{height:42mm!important;max-width:none!important;gap:.15mm!important}
+  .medical-chart-host .urge-bar{max-width:none!important;min-width:0!important}
+  .medical-chart-host .urge-chart-label{font-size:5.2pt!important}
+  .medical-chart-host .urge-legend{font-size:7pt!important;gap:2.5mm!important}
+  .medical-chart-host .parameter-trend-chart{height:42mm!important;display:grid!important;grid-template-columns:repeat(30,minmax(0,1fr))!important;gap:.35mm!important;padding:2mm!important}
+  .medical-chart-host .parameter-trend-col{min-width:0!important;width:auto!important}
+  .medical-chart-host .parameter-trend-bars{height:30mm!important;max-width:none!important}
+  .medical-chart-host .parameter-trend-label{font-size:5.2pt!important}
+  .medical-chart-host .parameter-trend-legend{font-size:7pt!important}
+  .medical-table{display:grid;grid-template-columns:repeat(2,1fr);gap:1.5mm}
+  .medical-symptom-row{display:grid;grid-template-columns:20mm 1fr;gap:3mm;padding:2mm 2.5mm;border:1px solid #e3d8cf;border-radius:2mm;font-size:8.5pt;break-inside:avoid}
+  .medical-report-list{display:grid;gap:2mm}.medical-report-entry{padding:2.5mm 3mm;border-left:1mm solid #a56f52;background:#fffaf6;break-inside:avoid;font-size:9pt}.medical-report-entry strong{display:block;margin-bottom:1mm;color:#7b4f3a}
+  body.printing-medical *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 }

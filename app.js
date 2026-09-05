@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.48";
+const APP_VERSION = "v0.49";
 const SUPABASE_URL = "https://nhyikuzvigfzrcgetxej.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
 let supabaseClient = null;
@@ -808,9 +808,39 @@ function printReport(){
   switchAppTab("report");
   setTimeout(()=>{window.print();document.body.classList.remove("printing-report");document.title=oldTitle;},50);
 }
+async function buildMedicalPrintSummary(){
+  const rangeDays=30;
+  const dates=Array.from({length:rangeDays},(_,i)=>dateOffset(i-rangeDays+1));
+  await loadUrgeHistory(rangeDays);
+  await loadParameterTrendHistory(rangeDays);
+  const mental=document.getElementById("urgeChart");
+  const sleep=document.getElementById("parameterTrendChart");
+  const symptoms=document.getElementById("symptomTimeline");
+  const mHost=document.getElementById("medicalMentalChart");
+  const sHost=document.getElementById("medicalSleepChart");
+  const tHost=document.getElementById("medicalSymptomTable");
+  if(mHost)mHost.innerHTML=mental?.outerHTML||"";
+  if(sHost)sHost.innerHTML=sleep?.outerHTML||"";
+  if(tHost){
+    tHost.innerHTML="";
+    const rows=symptoms?.querySelectorAll(".symptom-row")||[];
+    rows.forEach(r=>{const rr=document.createElement("div");rr.className="medical-symptom-row";rr.innerHTML=r.innerHTML;tHost.appendChild(rr);});
+  }
+  const items=(state.murmurs||[]).filter(x=>Number(x.mood)>=6);
+  const r=document.getElementById("medicalReportList"); if(r){r.innerHTML=""; items.forEach((item,i)=>{const row=document.createElement("div");row.className="medical-report-entry";row.innerHTML=`<strong>${i+1}. ${item.date||"日付未設定"}　気分 ${item.mood}/10</strong><div>${escapeHtml(item.text||"")}</div>`;r.appendChild(row);});}
+  const range=document.getElementById("medicalRange"); if(range) range.textContent=`対象期間：${dates[0]} ～ ${dates[dates.length-1]}`;
+}
+function escapeHtml(value){return String(value).replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));}
+function printMedicalSummary(){
+  document.body.classList.add("printing-medical");
+  document.title=`医療共有用_心身状態報告_${day()}`;
+  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.49";},120));
+}
+
 function initReport(){
   document.getElementById("refreshReportBtn")?.addEventListener("click",renderReport);
   document.getElementById("printReportBtn")?.addEventListener("click",printReport);
+  document.getElementById("printMedicalBtn")?.addEventListener("click",printMedicalSummary);
   renderReport();
 }
 
@@ -1199,28 +1229,47 @@ function renderParameterTrend(points){
   chart.innerHTML="";
   chart.dataset.count=String(points.length);
   const maxSleep=24;
-  const maxSymptoms=5;
   const showEvery=points.length>10?5:1;
   for(let i=0;i<points.length;i++){
     const p=points[i];
     const col=document.createElement("div"); col.className="parameter-trend-col";
     const bars=document.createElement("div"); bars.className="parameter-trend-bars";
-    const sleep=document.createElement("div"); sleep.className="parameter-bar sleep-bar"; sleep.style.height=`${Math.max((Number(p.sleep)||0)/maxSleep*100,2)}%`; sleep.title=`睡眠 ${p.sleep==null?"未記録":p.sleep+"時間"}`;
-    const symptoms=document.createElement("div"); symptoms.className="parameter-bar symptom-bar"; symptoms.style.height=`${Math.max((Number(p.symptoms)||0)/maxSymptoms*100,2)}%`; symptoms.title=`症状 ${p.symptoms??0}項目`;
-    bars.append(sleep,symptoms);
+    const sleep=document.createElement("div"); sleep.className="parameter-bar sleep-bar";
+    sleep.style.height=`${p.sleep==null?2:Math.max(Number(p.sleep)/maxSleep*100,2)}%`;
+    sleep.title=`睡眠 ${p.sleep==null?"未記録":p.sleep+"時間"}`;
+    bars.append(sleep);
     const label=document.createElement("span"); label.className="parameter-trend-label"; label.textContent=(i%showEvery===0||i===points.length-1)?shortDate(p.date):"";
     col.append(bars,label); chart.appendChild(col);
   }
 }
+function renderSymptomTimeline(points){
+  const wrap=document.getElementById("symptomTimeline");
+  if(!wrap)return;
+  wrap.innerHTML="";
+  const labels={
+    visual:"幻視", auditory:"幻聴", tactile:"幻触", persecution:"被害妄想", other:"幻覚（その他）"
+  };
+  const dates=points.map(p=>p.date).reverse();
+  for(const date of dates){
+    const p=points.find(x=>x.date===date)||{};
+    const symptoms=Array.isArray(p.hallucinations)?p.hallucinations.map(k=>labels[k]||k).filter(Boolean):[];
+    const row=document.createElement("div"); row.className="symptom-row";
+    const dateEl=document.createElement("strong"); dateEl.textContent=shortDate(date);
+    const text=document.createElement("span"); text.textContent=symptoms.length?symptoms.join("・"):"なし";
+    if(!symptoms.length) text.className="symptom-none";
+    row.append(dateEl,text); wrap.appendChild(row);
+  }
+}
+
 async function loadParameterTrendHistory(days=urgeChartDays){
   const chart=document.getElementById("parameterTrendChart"); if(!chart)return;
   const dates=Array.from({length:days},(_,i)=>dateOffset(i-days+1));
-  const empty=dates.map(date=>({date,sleep:null,symptoms:0}));
+  const empty=dates.map(date=>({date,sleep:null,hallucinations:[]}));
   if(!supabaseReady||!user){
     const today=state.parameters||{};
     const point=empty[empty.length-1];
     if(today.sleepHours!=="")point.sleep=Number(today.sleepHours);
-    point.symptoms=(today.hallucinations||[]).length;
+    point.hallucinations=[...(today.hallucinations||[])];
     renderParameterTrend(empty); return;
   }
   const {data,error}=await supabaseClient.from("custom_rules").select("id,text,category")
@@ -1231,11 +1280,12 @@ async function loadParameterTrendHistory(days=urgeChartDays){
     try{
       const d=JSON.parse(row.text||"{}");
       if(!dates.includes(d.date))continue;
-      byDate[d.date]={date:d.date,sleep:d.sleepHours===""||d.sleepHours==null?null:Number(d.sleepHours),symptoms:Array.isArray(d.hallucinations)?d.hallucinations.length:0};
+      byDate[d.date]={date:d.date,sleep:d.sleepHours===""||d.sleepHours==null?null:Number(d.sleepHours),hallucinations:Array.isArray(d.hallucinations)?d.hallucinations:[]};
     }catch{}
   }
-  const points=dates.map(date=>byDate[date]||{date,sleep:null,symptoms:0});
+  const points=dates.map(date=>byDate[date]||{date,sleep:null,hallucinations:[]});
   renderParameterTrend(points);
+  renderSymptomTimeline(points);
 }
 
 async function loadUrgeHistory(days=urgeChartDays){
