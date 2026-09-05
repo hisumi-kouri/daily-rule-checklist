@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#4f46e5">
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css?v=0.50">
+  <title>毎日のルールチェック v0.50</title>
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">Daily Rule Checklist</p>
+      <h1>毎日のルールチェック</h1>
+      <p id="date"></p>
+      <p id="syncStatus" class="sync">接続準備中…</p>
+    </div>
+    <div class="header-actions"><button id="printBtn" class="ghost">🖨️ PDF / 印刷</button><button id="printMedicalBtn" class="ghost">🩺 医療共有用PDF</button><button id="resetBtn" class="ghost">今日をリセット</button></div>
+  </header>
+
+  <nav class="app-tabs" aria-label="アプリ内メニュー">
+    <button type="button" class="app-tab active" data-tab="record">📊 記録・分析</button>
+    <button type="button" class="app-tab" data-tab="checksheet">📋 今日のチェックシート</button>
+    <button type="button" class="app-tab" data-tab="schedule">🗓️ スケジュール</button>
+    <button type="button" class="app-tab" data-tab="murmur">💭 呟き</button>
+    <button type="button" class="app-tab" data-tab="report">📝 報告</button>
+    <button type="button" class="app-tab" data-tab="hobby">🎨 趣味</button>
+    <button type="button" class="app-tab" data-tab="reading">📖 読書</button>
+  </nav>
+
+  <main>
+    <div id="checksheetTab" class="tab-panel active">
+      <section class="card checksheet-head">
+        <div class="section-head"><div><h2>📋 今日のチェックシート</h2><p class="muted">基本・生活・職場・今日の振り返りに分けて確認します。</p></div><span id="checksheetDate" class="muted small"></span></div>
+      </section>
+    </div>
+    <div id="scheduleTab" class="tab-panel">
+      <section class="card schedule-head">
+        <div class="section-head"><div><h2>🗓️ スケジュール</h2><p class="muted">予定を日付・時刻ごとに整理して、終わったものは完了にできます。</p></div><span id="scheduleCount" class="muted small">0件</span></div>
+      </section>
+      <section class="card schedule-card">
+        <div class="section-head"><h2>➕ 予定を追加</h2><span class="muted small">タイトルだけでも登録できます</span></div>
+        <div class="schedule-form">
+          <label>日付<input id="scheduleDate" type="date"></label>
+          <label>時刻（任意）<input id="scheduleTime" type="time"></label>
+          <label class="schedule-title-label">予定<input id="scheduleTitle" maxlength="120" placeholder="例：訪問看護、通院、買い物"></label>
+          <label class="schedule-note-label">メモ（任意）<textarea id="scheduleNote" rows="3" maxlength="1000" placeholder="持ち物・場所・伝えたいことなど"></textarea></label>
+          <button type="button" id="addScheduleBtn" class="parameter-save">予定を追加</button>
+        </div>
+        <p id="scheduleSaveStatus" class="muted small"></p>
+      </section>
+      <section class="card schedule-card">
+        <div class="schedule-toolbar">
+          <div class="schedule-view-buttons">
+            <button type="button" class="schedule-view active" data-schedule-view="day">この日</button>
+            <button type="button" class="schedule-view" data-schedule-view="upcoming">これから</button>
+            <button type="button" class="schedule-view" data-schedule-view="all">すべて</button>
+          </div>
+          <label class="schedule-filter-label">表示する日<input id="scheduleFilterDate" type="date"></label>
+        </div>
+        <div id="scheduleList" class="schedule-list"></div>
+      </section>
+    </div>
+    <div id="murmurTab" class="tab-panel">
+      <section class="card murmur-head">
+        <div class="section-head"><div><h2>💭 呟き</h2><p class="muted">日付・気分・呟き内容を記録できます。20件ごとにページ分けします。</p></div></div>
+      </section>
+      <section class="card murmur-card">
+        <div class="section-head"><h2>新しい呟きを記録</h2><span class="muted small">気分は0〜10</span></div>
+        <div class="murmur-form">
+          <label>日付<input id="murmurDate" type="date"></label>
+          <label>気分<select id="murmurMood"></select></label>
+          <label class="murmur-content-label">呟き内容<textarea id="murmurText" rows="5" maxlength="2000" placeholder="今日思ったこと、感じたことを書いてください"></textarea></label>
+          <button type="button" id="saveMurmurBtn" class="parameter-save">💾 呟きを保存</button>
+        </div>
+        <p id="murmurSaveStatus" class="muted small"></p>
+      </section>
+      <section class="card murmur-list-card">
+        <div class="section-head"><h2>保存した呟き</h2><span id="murmurCount" class="muted small">0件</span></div>
+        <div id="murmurList" class="murmur-list"></div>
+        <div id="murmurPagination" class="murmur-pagination"></div>
+      </section>
+    </div>
+    <div id="hobbyTab" class="tab-panel">
+      <section class="card hobby-head">
+        <div class="section-head"><div><h2>🎨 趣味</h2><p class="muted">趣味の進捗を記録できます。</p></div><span class="muted small">連載</span></div>
+      </section>
+      <section class="card hobby-card">
+        <div class="section-head"><h2>📚 連載（長編）</h2><span class="muted small">作品ごとに管理できます。</span></div>
+        <div id="hobbyLongWorksList"></div>
+      </section>
+      <section class="card hobby-card">
+        <div class="section-head"><h2>📖 短編</h2><span class="muted small">長編と同じルールで管理できます。</span></div>
+        <div id="hobbyShortWorksList"></div>
+      </section>
+      <section class="card hobby-card">
+        <div class="section-head"><h2>➕ 作品追加</h2><span class="muted small">タイトル・種類・目標文字数を設定</span></div>
+        <div class="form hobby-work-add-form">
+          <input id="newHobbyTitle" placeholder="作品タイトル" maxlength="100">
+          <select id="newHobbyType">
+            <option value="long">📚 連載（長編）</option>
+            <option value="short">📖 短編</option>
+          </select>
+          <input id="newHobbyGoal" type="number" min="1" step="1" placeholder="目標文字数">
+          <button type="button" id="addHobbyWorkBtn">作品を追加</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="readingTab" class="tab-panel">
+      <section class="card reading-head">
+        <div class="section-head"><div><h2>📖 読書</h2><p class="muted">作品ごとに読書の進捗を記録できます。</p></div><span id="readingCount" class="muted small">0作品</span></div>
+      </section>
+      <section class="card reading-card">
+        <div class="section-head"><h2>📚 読書作品</h2><span class="muted small">チェックリスト形式</span></div>
+        <div id="readingList" class="reading-list"></div>
+      </section>
+      <section class="card reading-card">
+        <div class="section-head"><h2>➕ 作品追加</h2><span class="muted small">作品名・作者・ジャンル・総ページ数・現在ページを設定</span></div>
+        <div class="form reading-add-form">
+          <input id="newReadingTitle" placeholder="作品名" maxlength="200">
+          <input id="newReadingAuthor" placeholder="作者" maxlength="100">
+          <input id="newReadingGenre" placeholder="ジャンル" maxlength="100">
+          <input id="newReadingTotalPages" type="number" min="1" step="1" placeholder="総ページ数">
+          <input id="newReadingCurrentPage" type="number" min="0" step="1" placeholder="現在ページ">
+          <button type="button" id="addReadingBtn">作品を追加</button>
+        </div>
+      </section>
+    </div>
+    <section id="medicalPrintSummary" class="medical-print-summary" aria-hidden="true">
+      <div class="medical-title">心身状態・経過報告</div>
+      <div class="medical-range" id="medicalRange"></div>
+      <section class="medical-section">
+        <h2>1. 心の状態の推移</h2>
+        <div id="medicalMentalChart" class="medical-chart-host"></div>
+      </section>
+      <section class="medical-section">
+        <h2>2. 睡眠時間</h2>
+        <div id="medicalSleepChart" class="medical-chart-host"></div>
+      </section>
+      <section class="medical-section">
+        <h2>3. 症状・体験</h2>
+        <div id="medicalSymptomTable" class="medical-table"></div>
+      </section>
+      <section class="medical-section">
+        <h2>4. 報告（気分6以上の呟き）</h2>
+        <div id="medicalReportList" class="medical-report-list"></div>
+      </section>
+    </section>
+
+    <div id="reportTab" class="tab-panel">
+      <section class="card report-head">
+        <div class="section-head"><div><h2>📝 報告書</h2><p class="muted">「呟き」のうち、気分が6以上の記録を自動でまとめます。</p></div><span id="reportCount" class="muted small">0件</span></div>
+        <div class="report-actions">
+          <button type="button" id="refreshReportBtn" class="secondary">🔄 報告を更新</button>
+          <button type="button" id="printReportBtn" class="parameter-save">🖨️ 報告書を印刷 / PDF</button>
+        </div>
+      </section>
+      <section class="card report-card">
+        <div id="reportEmpty" class="muted small">気分6以上の呟きはありません。</div>
+        <div id="reportList" class="report-list"></div>
+      </section>
+    </div>
+    <div id="recordTab" class="tab-panel">
+    <section class="card account-card">
+      <div class="account-head">
+        <div>
+          <h2>👤 アカウント・同期</h2>
+          <p id="accountStatus" class="muted">確認中…</p>
+        </div>
+        <button id="signOutBtn" class="ghost hidden">ログアウト</button>
+      </div>
+
+      <div id="anonymousPanel">
+        <p class="muted">この端末では匿名アカウントで利用しています。メールアドレスを連携すると、PC・スマホで同じデータを使えます。</p>
+        <div class="form">
+          <input id="linkEmail" type="email" placeholder="メールアドレス">
+          <button id="linkEmailBtn">メールを連携</button>
+        </div>
+
+        <div id="passwordPanel" class="hidden">
+          <p class="muted">メール確認が完了したら、8文字以上のパスワードを設定してください。</p>
+          <div class="form">
+            <input id="linkPassword" type="password" placeholder="8文字以上のパスワード">
+            <button id="setPasswordBtn">パスワードを設定</button>
+          </div>
+        </div>
+
+        <div class="account-action login-box">
+          <h3>🔑 すでにアカウントをお持ちの方</h3>
+          <p class="muted small">登録済みのメールアドレスとパスワードでログインできます。ログイン後、この端末の未同期データも引き継げます。</p>
+          <div class="form">
+            <input id="loginEmail" type="email" placeholder="登録済みメールアドレス">
+            <input id="loginPassword" type="password" placeholder="パスワード">
+            <button id="loginBtn">ログイン</button>
+          </div>
+          <button id="loginResetBtn" class="secondary">パスワードを忘れた場合</button>
+        </div>
+
+        <p id="anonAuthMessage" class="auth-message"></p>
+      </div>
+
+      <div id="loggedInPanel" class="hidden">
+        <p class="muted">このアカウントでPC・スマホ間のチェック状態と追加ルールを同期できます。</p>
+
+        <div class="account-action">
+          <h3>🔑 パスワード</h3>
+          <p class="muted small">このアカウントのログイン用パスワードを設定・変更します。</p>
+          <div class="form">
+            <input id="currentPassword" type="password" placeholder="現在のパスワード（設定済みの場合）">
+            <input id="newPassword" type="password" placeholder="新しいパスワード（8文字以上）">
+            <button id="changePasswordBtn">パスワードを更新</button>
+          </div>
+        </div>
+
+        <div class="account-action">
+          <h3>📧 パスワードを忘れた場合</h3>
+          <p class="muted small">登録メールアドレスへ再設定メールを送ります。</p>
+          <button id="resetPasswordBtn" class="secondary">再設定メールを送る</button>
+        </div>
+
+        <div class="account-action">
+          <h3>📱 別の端末で使う</h3>
+          <p class="muted small">別のPCやスマホで、このメールアドレスとパスワードを使ってログインしてください。</p>
+        </div>
+
+        <p id="authMessage" class="auth-message"></p>
+      </div>
+    </section>
+
+    <section class="card medication-card">
+      <div class="section-head">
+        <h2>💊 服薬管理</h2>
+        <span class="muted small">追加・変更・削除できます</span>
+      </div>
+      <div id="medicationList" class="medication-list"></div>
+      <div class="medication-add form medication-form">
+        <input id="newMedicationName" placeholder="薬の名前">
+        <input id="newMedicationDose" placeholder="用量（例：1錠）">
+        <input id="newMedicationTiming" placeholder="服用タイミング（例：朝食後）">
+        <input id="newMedicationNote" placeholder="メモ（任意）">
+        <button id="addMedicationBtn">追加</button>
+      </div>
+      <p class="muted small">服用したらチェックできます。チェック状態は日付ごとに保存されます。</p>
+    </section>
+
+    <section class="priority card">
+      <div class="section-head">
+        <h2>🌿 最優先</h2>
+        <span class="muted small">変更・削除できます</span>
+      </div>
+      <div id="priorityList" class="priority-order"></div>
+      <div class="priority-add form">
+        <input id="newPriorityText" placeholder="最優先の項目を追加">
+        <button id="addPriorityBtn">追加</button>
+      </div>
+      <p>この順番を忘れない。</p>
+    </section>
+
+    <section class="progress card">
+      <div class="progress-head">
+        <strong>今日の達成率</strong>
+        <span id="progressText">0 / 0（0%）</span>
+      </div>
+      <div class="bar"><div id="progressBar"></div></div>
+      <div id="achievementSummary" class="achievement-summary">達成率 0%</div>
+    </section>
+
+    <section class="card chart-card">
+      <div class="section-head">
+        <h2>📊 達成率グラフ</h2>
+        <span class="muted small">直近7日間</span>
+      </div>
+      <div id="achievementChart" class="achievement-chart" aria-label="直近7日間の達成率グラフ"></div>
+      <p id="chartNote" class="muted small">データを読み込んでいます…</p>
+    </section>
+
+    <section class="card urge-chart-card">
+      <div class="section-head">
+        <h2>📈 心の状態の推移</h2>
+        <span class="muted small">7日間 / 30日間</span>
+      </div>
+      <div class="urge-chart-tabs">
+        <button type="button" class="urge-tab active" data-days="7">7日間</button>
+        <button type="button" class="urge-tab" data-days="30">30日間</button>
+      </div>
+      <div id="urgeChart" class="urge-chart" aria-label="心の状態の推移グラフ"></div>
+      <div class="urge-legend">
+<span>● 消えたい衝動</span><span>● 死にたい衝動</span><span>● 気分</span><span>● 不安</span><span>● イライラ</span><span>● 疲労感</span>
+</div>
+      <div class="parameter-trend-block">
+        <div class="parameter-trend-title">📝 睡眠時間の推移</div>
+        <div id="parameterTrendChart" class="parameter-trend-chart" aria-label="睡眠時間の推移"></div>
+        <div class="parameter-trend-legend"><span>● 睡眠時間</span></div>
+      </div>
+      <div class="symptom-timeline-block">
+        <div class="parameter-trend-title">🩺 症状・体験の記録</div>
+        <div id="symptomTimeline" class="symptom-timeline" aria-label="日ごとの症状・体験"></div>
+      </div>
+      <p id="urgeChartNote" class="muted small">データを読み込んでいます…</p>
+    </section>
+
+    <section class="card urge-card">
+      <div class="section-head">
+        <h2>🫂 心の状態</h2>
+        <span class="muted small">0〜10で記録できます</span>
+      </div>
+      <div id="urgeLevels"></div>
+      <p class="muted small">この記録は通常のルール達成率には含めません。</p>
+      <button type="button" id="saveUrgesBtn" class="parameter-save urge-save">💾 心の状態を保存</button>
+      <p id="urgeSaveStatus" class="muted small"></p>
+    </section>
+
+    <section class="card parameter-card">
+      <div class="section-head">
+        <h2>📝 その他パラメーター</h2>
+        <span class="muted small">今日の状態を記録できます</span>
+      </div>
+      <div class="parameter-group">
+        <label for="sleepHours">😴 睡眠時間</label>
+        <div class="parameter-inline">
+          <input id="sleepHours" type="number" min="0" max="24" step="0.5" placeholder="例：7.5">
+          <span>時間</span>
+        </div>
+      </div>
+      <div class="parameter-group">
+        <p class="parameter-label">症状・体験（当てはまるものにチェック）</p>
+        <div class="parameter-checks">
+          <label><input type="checkbox" id="hallucinationVisual"> 幻視</label>
+          <label><input type="checkbox" id="hallucinationAuditory"> 幻聴</label>
+          <label><input type="checkbox" id="hallucinationTactile"> 幻触</label>
+          <label><input type="checkbox" id="delusionPersecution"> 被害妄想</label>
+          <label><input type="checkbox" id="hallucinationOther"> 幻覚（その他）</label>
+        </div>
+      </div>
+      <div class="parameter-group">
+        <label for="parameterNote">補足</label>
+        <textarea id="parameterNote" rows="5" maxlength="2000" placeholder="今日の状態について自由に入力できます"></textarea>
+      </div>
+      <button type="button" id="saveParametersBtn" class="parameter-save">💾 その他パラメーターを保存</button>
+      <p id="parameterStatus" class="muted small"></p>
+    </section>
+
+    <div id="categories"></div>
+
+    <section class="card add">
+      <h2>➕ ルールを追加</h2>
+      <div class="form add-rule-form">
+        <input id="newText" placeholder="例：作業前に○○を確認する">
+        <input id="newSource" placeholder="補足説明（任意）" maxlength="300">
+        <select id="newCategory">
+          <option value="__custom__">✏️ 自由入力</option>
+        </select>
+        <input id="newCategoryCustom" class="category-custom" placeholder="自由なカテゴリー名を入力" style="display:none" maxlength="50">
+        <button id="addBtn">追加</button>
+      </div>
+    </section>
+    </div>
+  </main>
+
+  <footer>Supabase同期版 v0.50</footer>
+  <script type="module" src="app.js?v=0.50"></script>
+</body>
+</html>
