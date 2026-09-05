@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.49";
+const APP_VERSION = "v0.50";
 const SUPABASE_URL = "https://nhyikuzvigfzrcgetxej.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
 let supabaseClient = null;
@@ -29,7 +29,7 @@ const base=[];
 
 let supabaseReady=false, user=null;
 let supabaseOffline=false;
-let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}, reading:[]};
+let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, schedules:[], scheduleView:"day", scheduleFilterDate:"", hobby:{dearMaster:"",works:[]}, reading:[]};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
@@ -56,6 +56,7 @@ const MEDICATION_CATEGORY="__medication__";
 const DAILY_PARAMETER_CATEGORY="__daily_parameters__";
 const DAILY_MENTAL_CATEGORY="__daily_mental__";
 const MURMUR_CATEGORY="__murmur__";
+const SCHEDULE_CATEGORY="__schedule__";
 const HOBBY_CATEGORY="__hobby__";
 const HOBBY_WORK_CATEGORY="__hobby_work__";
 const READING_CATEGORY="__reading__";
@@ -93,7 +94,7 @@ function baseItems(){
 
 function allItems(){
   const rules=state.custom
-    .filter(x=>x.cat!==MEDICATION_CATEGORY && x.cat!==DAILY_PARAMETER_CATEGORY && x.cat!==DAILY_MENTAL_CATEGORY)
+    .filter(x=>x.cat!==MEDICATION_CATEGORY && x.cat!==DAILY_PARAMETER_CATEGORY && x.cat!==DAILY_MENTAL_CATEGORY && x.cat!==MURMUR_CATEGORY && x.cat!==SCHEDULE_CATEGORY && x.cat!==HOBBY_CATEGORY && x.cat!==HOBBY_WORK_CATEGORY && x.cat!==READING_CATEGORY)
     .map(x=>({...x,id:`c:${x.id}`,trackAchievement:!NON_ACHIEVEMENT_RULES.has(x.text)}));
   const meds=(state.medications||[]).map(x=>({
     id:`m:${x.id}`, cat:"服薬管理", text:`${x.name}${x.dose?`（${x.dose}）`:""}${x.timing?`・${x.timing}`:""}`, source:x.note||""
@@ -630,6 +631,43 @@ function initHobby(){
   const btn=document.getElementById("addHobbyWorkBtn"); btn?.addEventListener("click",addHobbyWork); renderHobby();
 }
 
+function getLocalSchedules(){try{return JSON.parse(localStorage.getItem("schedules")||"[]")||[];}catch{return [];}}
+function setLocalSchedules(items){localStorage.setItem("schedules",JSON.stringify(items));}
+function normalizeSchedule(item,index=0){return{id:item?.id||`local-${Date.now()}-${index}`,date:String(item?.date||day()),time:String(item?.time||""),title:String(item?.title||""),note:String(item?.note||""),completed:!!item?.completed,createdAt:item?.createdAt||Date.now()};}
+function scheduleSort(a,b){const completed=Number(a.completed)-Number(b.completed);if(completed)return completed;return `${a.date}T${a.time||"99:99"}`.localeCompare(`${b.date}T${b.time||"99:99"}`);}
+function visibleSchedules(){const items=[...(state.schedules||[])];if(state.scheduleView==="day")return items.filter(x=>x.date===(state.scheduleFilterDate||day()));if(state.scheduleView==="upcoming")return items.filter(x=>x.date>=day()&&!x.completed);return items;}
+function renderSchedules(){
+  const list=document.getElementById("scheduleList"),count=document.getElementById("scheduleCount");if(!list||!count)return;
+  const items=visibleSchedules().sort(scheduleSort);count.textContent=`${items.length}件`;list.innerHTML="";
+  if(!items.length){const p=document.createElement("p");p.className="muted small";p.textContent=state.scheduleView==="day"?"この日の予定はありません。":"予定はありません。";list.appendChild(p);return;}
+  for(const item of items){
+    const row=document.createElement("article");row.className=`schedule-entry${item.completed?" completed":""}`;
+    const done=document.createElement("input");done.type="checkbox";done.checked=item.completed;done.setAttribute("aria-label",`${item.title} を完了にする`);done.onchange=()=>saveSchedule({...item,completed:done.checked});
+    const content=document.createElement("div");content.className="schedule-entry-content";
+    const top=document.createElement("div");top.className="schedule-entry-top";
+    const title=document.createElement("strong");title.textContent=item.title||"（予定名なし）";
+    const when=document.createElement("span");when.className="schedule-when";when.textContent=`${item.date}${item.time?` ${item.time}`:""}`;top.append(title,when);content.appendChild(top);
+    if(item.note){const note=document.createElement("p");note.className="schedule-note";note.textContent=item.note;content.appendChild(note);}
+    const actions=document.createElement("div");actions.className="rule-actions";
+    const edit=document.createElement("button");edit.type="button";edit.className="edit-rule";edit.textContent="変更";edit.onclick=()=>editSchedule(item.id);
+    const del=document.createElement("button");del.type="button";del.className="delete-rule";del.textContent="削除";del.onclick=()=>deleteSchedule(item.id);actions.append(edit,del);row.append(done,content,actions);list.appendChild(row);
+  }
+}
+async function loadSchedules(){
+  const local=getLocalSchedules().map(normalizeSchedule);let items=[...local];
+  if(supabaseReady&&user){try{const res=await supabaseClient.from("custom_rules").select("id,text,created_at").eq("user_id",user.id).eq("category",SCHEDULE_CATEGORY).order("created_at",{ascending:true});if(!res.error){const cloud=[];for(const row of res.data||[]){try{cloud.push(normalizeSchedule({...JSON.parse(row.text||"{}"),id:row.id,createdAt:row.created_at}));}catch{}}const ids=new Set(cloud.map(x=>String(x.id)));items=[...cloud,...local.filter(x=>!ids.has(String(x.id)))];}}catch{}}
+  state.schedules=items;renderSchedules();
+}
+async function saveSchedule(item){
+  const clean=normalizeSchedule(item),index=state.schedules.findIndex(x=>String(x.id)===String(clean.id));if(index>=0)state.schedules[index]=clean;else state.schedules.push(clean);setLocalSchedules(state.schedules);renderSchedules();let cloudSaved=false;
+  if(supabaseReady&&user){try{const payload={date:clean.date,time:clean.time,title:clean.title,note:clean.note,completed:clean.completed};if(String(clean.id).startsWith("local-")){const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:JSON.stringify(payload),category:SCHEDULE_CATEGORY}).select("id,created_at").single();if(!res.error){clean.id=res.data.id;clean.createdAt=res.data.created_at;const i=state.schedules.findIndex(x=>String(x.id)===String(item.id));if(i>=0)state.schedules[i]=clean;setLocalSchedules(state.schedules);cloudSaved=true;}}else{const res=await supabaseClient.from("custom_rules").update({text:JSON.stringify(payload)}).eq("id",clean.id).eq("user_id",user.id).eq("category",SCHEDULE_CATEGORY);cloudSaved=!res.error;}}catch{}}
+  const status=document.getElementById("scheduleSaveStatus");if(status)status.textContent=cloudSaved?"☁️ 保存しました":"💾 この端末に保存しました";renderSchedules();
+}
+async function addSchedule(){const date=document.getElementById("scheduleDate")?.value||day(),time=document.getElementById("scheduleTime")?.value||"",title=document.getElementById("scheduleTitle")?.value.trim()||"",note=document.getElementById("scheduleNote")?.value.trim()||"";if(!title){const status=document.getElementById("scheduleSaveStatus");if(status)status.textContent="予定を入力してください。";return;}await saveSchedule({id:`local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,date,time,title,note,completed:false,createdAt:Date.now()});["scheduleTime","scheduleTitle","scheduleNote"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});}
+async function editSchedule(id){const item=state.schedules.find(x=>String(x.id)===String(id));if(!item)return;const title=prompt("予定を変更してください。",item.title);if(title===null)return;const clean=title.trim();if(!clean){alert("予定を空にはできません。");return;}const date=prompt("日付を変更してください（例：2026-09-05）。",item.date);if(date===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){alert("日付の形式が正しくありません。");return;}const time=prompt("時刻を変更してください（空欄でも可）。",item.time);if(time===null)return;if(time&&!/^\d{2}:\d{2}$/.test(time)){alert("時刻の形式が正しくありません。");return;}const note=prompt("メモを変更してください（空欄でも可）。",item.note);if(note===null)return;await saveSchedule({...item,title:clean,date,time,note:note.trim()});}
+async function deleteSchedule(id){const item=state.schedules.find(x=>String(x.id)===String(id));if(!item||!confirm(`「${item.title}」を削除しますか？`))return;state.schedules=state.schedules.filter(x=>String(x.id)!==String(id));setLocalSchedules(state.schedules);renderSchedules();if(supabaseReady&&user&&!String(id).startsWith("local-")){try{await supabaseClient.from("custom_rules").delete().eq("id",id).eq("user_id",user.id).eq("category",SCHEDULE_CATEGORY);}catch{}}}
+function initSchedules(){const add=document.getElementById("addScheduleBtn"),date=document.getElementById("scheduleDate"),filter=document.getElementById("scheduleFilterDate");state.scheduleFilterDate=day();if(date)date.value=day();if(filter)filter.value=state.scheduleFilterDate;add?.addEventListener("click",addSchedule);filter?.addEventListener("change",()=>{state.scheduleFilterDate=filter.value||day();state.scheduleView="day";document.querySelectorAll(".schedule-view").forEach(b=>b.classList.toggle("active",b.dataset.scheduleView==="day"));renderSchedules();});document.querySelectorAll(".schedule-view").forEach(btn=>btn.addEventListener("click",()=>{state.scheduleView=btn.dataset.scheduleView;document.querySelectorAll(".schedule-view").forEach(b=>b.classList.toggle("active",b===btn));renderSchedules();}));loadSchedules();}
+
 function getLocalReading(){ try{return JSON.parse(localStorage.getItem("readingBooks")||"[]")||[];}catch{return [];} }
 function setLocalReading(data){ localStorage.setItem("readingBooks",JSON.stringify(data)); }
 function calcReadingPercent(book){
@@ -834,7 +872,7 @@ function escapeHtml(value){return String(value).replace(/[&<>'"]/g,ch=>({'&':'&a
 function printMedicalSummary(){
   document.body.classList.add("printing-medical");
   document.title=`医療共有用_心身状態報告_${day()}`;
-  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.49";},120));
+  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.50";},120));
 }
 
 function initReport(){
@@ -875,7 +913,7 @@ async function loadCloud(){
   if(cr.error){console.error(cr.error); return;}
   const rows=cr.data||[];
   state.custom=rows
-    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY && x.category!==DAILY_PARAMETER_CATEGORY && x.category!==DAILY_MENTAL_CATEGORY)
+    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY && x.category!==DAILY_PARAMETER_CATEGORY && x.category!==DAILY_MENTAL_CATEGORY && x.category!==MURMUR_CATEGORY && x.category!==SCHEDULE_CATEGORY && x.category!==HOBBY_CATEGORY && x.category!==HOBBY_WORK_CATEGORY && x.category!==READING_CATEGORY)
     .map(x=>({id:x.id,text:x.text,cat:x.category,source:x.source||""}));
   state.priority=rows
     .filter(x=>x.category===PRIORITY_CATEGORY && x.text!==PRIORITY_SENTINEL_TEXT)
@@ -883,6 +921,7 @@ async function loadCloud(){
   state.medications=rows.filter(x=>x.category===MEDICATION_CATEGORY).map(parseMedicationRow);
   await loadDailyParameters();
   await loadMurmurs();
+  await loadSchedules();
   render();
   await loadAchievementHistory();
   await loadUrgeHistory(urgeChartDays);
@@ -1068,7 +1107,7 @@ async function sendPasswordReset(){
 async function logout(){
   const {error}=await supabaseClient.auth.signOut();
   if(error){alert(error.message); return;}
-  user=null; state={checks:{},custom:[],priority:[],medications:[],parameters:{sleepHours:"",hallucinations:[],note:""},parameterRowId:null,murmurs:[],murmurPage:1};
+  user=null; state={checks:{},custom:[],priority:[],medications:[],parameters:{sleepHours:"",hallucinations:[],note:""},parameterRowId:null,murmurs:[],murmurPage:1,schedules:[],scheduleView:"day",scheduleFilterDate:day()};
   setStatus("ログアウトしました");
   accountStatus.textContent="ログアウトしました。再ログインは次のログイン画面から行えます。";
   signOutBtn.classList.add("hidden");
@@ -1564,6 +1603,7 @@ function render(){
 // タブ切り替え：今日のチェックシートにルール一覧とルール追加を集約
 const checksheetTab=document.getElementById("checksheetTab");
 const recordTab=document.getElementById("recordTab");
+const scheduleTab=document.getElementById("scheduleTab");
 const murmurTab=document.getElementById("murmurTab");
 const reportTab=document.getElementById("reportTab");
 const hobbyTab=document.getElementById("hobbyTab");
@@ -1578,6 +1618,7 @@ function switchAppTab(name){
   document.querySelectorAll(".app-tab").forEach(btn=>btn.classList.toggle("active",btn.dataset.tab===name));
   checksheetTab?.classList.toggle("active",name==="checksheet");
   recordTab?.classList.toggle("active",name==="record");
+  scheduleTab?.classList.toggle("active",name==="schedule");
   murmurTab?.classList.toggle("active",name==="murmur");
   reportTab?.classList.toggle("active",name==="report");
   hobbyTab?.classList.toggle("active",name==="hobby");
@@ -1602,6 +1643,7 @@ initReading();
 loadReading();
 initMurmurs();
 initReport();
+initSchedules();
 initHobby();
 loadHobby();
 
