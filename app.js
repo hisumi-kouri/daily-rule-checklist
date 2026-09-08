@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.52.4";
+const APP_VERSION = "v0.52.5";
 const SUPABASE_URL = "https://nhyikuzvigfzrcgetxej.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
 let supabaseClient = null;
@@ -58,15 +58,15 @@ const DAILY_MENTAL_CATEGORY="__daily_mental__";
 const MURMUR_CATEGORY="__murmur__";
 const HOBBY_CATEGORY="__hobby__";
 const HOBBY_WORK_CATEGORY="__hobby_work__";
-const HIDDEN_CHECKLIST_CATEGORIES=new Set([MURMUR_CATEGORY,HOBBY_CATEGORY,HOBBY_WORK_CATEGORY,"__schedule__","schedule","murmur","hobby"]);
-const HIDDEN_CHECKLIST_TEXTS=new Set(["murmur","schedule","hobby"]);
+const READING_CATEGORY="__reading__";
+const HIDDEN_CHECKLIST_CATEGORIES=new Set([MURMUR_CATEGORY,HOBBY_CATEGORY,HOBBY_WORK_CATEGORY,READING_CATEGORY,"__schedule__","schedule","murmur","hobby","reading","呟き","趣味","読書"]);
+const HIDDEN_CHECKLIST_TEXTS=new Set(["murmur","schedule","hobby","reading","呟き","趣味","読書"]);
 function isHiddenChecklistRule(rule){
   const cat=String(rule?.category||rule?.group||"").toLowerCase();
   const text=String(rule?.text||rule?.name||"").trim().toLowerCase();
   return HIDDEN_CHECKLIST_CATEGORIES.has(cat)||HIDDEN_CHECKLIST_TEXTS.has(text);
 }
 
-const READING_CATEGORY="__reading__";
 const DEAR_MASTER_GOAL=100000000;
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
 const URGE_TYPES=[
@@ -101,7 +101,7 @@ function baseItems(){
 
 function allItems(){
   const rules=state.custom
-    .filter(x=>x.cat!==MEDICATION_CATEGORY && x.cat!==DAILY_PARAMETER_CATEGORY && x.cat!==DAILY_MENTAL_CATEGORY)
+    .filter(x=>x.cat!==MEDICATION_CATEGORY && x.cat!==DAILY_PARAMETER_CATEGORY && x.cat!==DAILY_MENTAL_CATEGORY && !isHiddenChecklistRule({category:x.cat,text:x.text}))
     .map(x=>({...x,id:`c:${x.id}`,trackAchievement:!NON_ACHIEVEMENT_RULES.has(x.text)}));
   const meds=(state.medications||[]).map(x=>({
     id:`m:${x.id}`, cat:"服薬管理", text:`${x.name}${x.dose?`（${x.dose}）`:""}${x.timing?`・${x.timing}`:""}`, source:x.note||""
@@ -1197,6 +1197,7 @@ async function logout(){
 }
 
 async function addCustom(text,cat,source=""){
+  if(isHiddenChecklistRule({category:cat,text})){alert("呟き・趣味・読書・スケジュールは今日のチェックシートには追加できません。専用欄を使用してください。"); return;}
   if(!supabaseReady||!user){alert("Supabaseに接続できていません。"); return;}
   const {data,error}=await insertRuleRow(user.id,{text,cat,source});
   if(error){alert(`追加に失敗しました：${error.message}`); return;}
@@ -1216,6 +1217,7 @@ async function editRule(ruleId){
   if(category===null)return;
   const newCategory=category.trim();
   if(!newCategory){alert("カテゴリを空にはできません。"); return;}
+  if(isHiddenChecklistRule({category:newCategory,text:newText})){alert("呟き・趣味・読書・スケジュールは今日のチェックシートには設定できません。専用欄を使用してください。"); return;}
   const source=prompt("補足説明（不要なら空欄）",rule.source||"");
   if(source===null)return;
 
@@ -1721,7 +1723,7 @@ function refreshCategoryOptions(){
   const select=document.getElementById("newCategory"); if(!select)return;
   const current=select.value;
   const names=["基本","生活","職場","今日の振り返り","通院",...(state.custom||[]).map(x=>x.cat)];
-  const unique=[...new Set(names)].filter(x=>x && !["__custom__","__system__","__priority__","__medication__","__daily_parameters__","__daily_mental__"].includes(x));
+  const unique=[...new Set(names)].filter(x=>x && !["__custom__","__system__","__priority__","__medication__","__daily_parameters__","__daily_mental__"].includes(x) && !isHiddenChecklistRule({category:x,text:x}));
   select.innerHTML=unique.map(x=>`<option value="${x.replaceAll('"','&quot;')}">${x}</option>`).join("")+`<option value="__custom__">✏️ 自由入力</option>`;
   if([...select.options].some(o=>o.value===current)) select.value=current;
 }
