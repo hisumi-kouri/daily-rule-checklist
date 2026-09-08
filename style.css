@@ -321,3 +321,10 @@ footer{color:#9b8f85}
 .parameter-trend-bars{height:110px;}
 @media(max-width:650px){.urge-chart{height:245px}.urge-chart svg{height:235px}.parameter-trend-value{font-size:9px}.parameter-trend-bars{height:95px}}
 @media print{.urge-chart{overflow:visible}.urge-chart svg{min-width:0}.parameter-trend-value{font-size:9px}}
+
+/* v0.52: その他パラメーターの補足を報告へ必ず掲載 */
+.report-parameter-note{border-left-color:#a78bce;background:#faf7ff}
+.report-parameter-tag{font-weight:800;color:#8b72b2;background:#eee6fb;border-radius:999px;padding:4px 9px;font-size:12px;white-space:nowrap}
+.medical-parameter-note{border-left:3px solid #a78bce;background:#faf7ff;padding:8px 10px;border-radius:8px}
+.medical-parameter-note strong{color:#8066a8}
+@media print{.report-parameter-note{background:#faf7ff!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}.report-parameter-tag{background:#eee6fb!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}.medical-parameter-note{background:#faf7ff!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}}

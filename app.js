@@ -790,22 +790,51 @@ async function deleteMurmur(id){
   if(supabaseReady&&user&&!String(id).startsWith("local-")){ try{await supabaseClient.from("custom_rules").delete().eq("id",id).eq("user_id",user.id).eq("category",MURMUR_CATEGORY);}catch{} }
   state.murmurs=state.murmurs.filter(x=>String(x.id)!==String(id)); renderMurmurs(); renderReport();
 }
-function renderReport(){
+async function getParameterReportPoints(days=30){
+  const dates=Array.from({length:days},(_,i)=>dateOffset(i-days+1));
+  const byDate={};
+  for(const date of dates){
+    const raw=localStorage.getItem(`dailyParameters:${date}`);
+    if(raw){try{const d=JSON.parse(raw)||{}; byDate[date]={date,note:String(d.note||"").trim()};}catch{}}
+  }
+  if(supabaseReady&&user){
+    const res=await supabaseClient.from("custom_rules").select("text").eq("user_id",user.id).eq("category",DAILY_PARAMETER_CATEGORY).order("created_at",{ascending:false});
+    if(!res.error){
+      for(const row of res.data||[]){
+        try{const d=JSON.parse(row.text||"{}"); if(!dates.includes(d.date))continue; byDate[d.date]={date:d.date,note:String(d.note||"").trim()};}catch{}
+      }
+    }
+  }
+  return dates.map(date=>byDate[date]||{date,note:""}).filter(x=>x.note);
+}
+
+async function renderReport(){
   const list=document.getElementById("reportList");
   const empty=document.getElementById("reportEmpty");
   const count=document.getElementById("reportCount");
   if(!list||!empty||!count)return;
   const items=(state.murmurs||[]).filter(x=>Number(x.mood)>=6);
-  count.textContent=`${items.length}件`;
+  const parameterNotes=await getParameterReportPoints(30);
+  count.textContent=`${items.length + parameterNotes.length}件`;
   list.innerHTML="";
-  empty.style.display=items.length?"none":"block";
-  items.forEach((item,index)=>{
+  empty.style.display=(items.length||parameterNotes.length)?"none":"block";
+  let index=0;
+  items.forEach(item=>{
     const article=document.createElement("article"); article.className="report-entry";
     const head=document.createElement("div"); head.className="report-entry-head";
-    const date=document.createElement("strong"); date.textContent=`${index+1}. ${item.date||"日付未設定"}`;
+    const date=document.createElement("strong"); date.textContent=`${++index}. ${item.date||"日付未設定"}`;
     const mood=document.createElement("span"); mood.className="report-mood"; mood.textContent=`気分 ${item.mood}/10`;
     head.append(date,mood);
     const body=document.createElement("p"); body.className="report-entry-body"; body.textContent=item.text||"";
+    article.append(head,body); list.appendChild(article);
+  });
+  parameterNotes.forEach(item=>{
+    const article=document.createElement("article"); article.className="report-entry report-parameter-note";
+    const head=document.createElement("div"); head.className="report-entry-head";
+    const date=document.createElement("strong"); date.textContent=`${++index}. ${item.date}`;
+    const tag=document.createElement("span"); tag.className="report-parameter-tag"; tag.textContent="その他パラメーターの補足";
+    head.append(date,tag);
+    const body=document.createElement("p"); body.className="report-entry-body"; body.textContent=item.note;
     article.append(head,body); list.appendChild(article);
   });
 }
@@ -841,7 +870,8 @@ async function buildMedicalPrintSummary(){
     rows.forEach(r=>{const rr=document.createElement("div");rr.className="medical-symptom-row";rr.innerHTML=r.innerHTML;tHost.appendChild(rr);});
   }
   const items=(state.murmurs||[]).filter(x=>Number(x.mood)>=6);
-  const r=document.getElementById("medicalReportList"); if(r){r.innerHTML=""; items.forEach((item,i)=>{const row=document.createElement("div");row.className="medical-report-entry";row.innerHTML=`<strong>${i+1}. ${item.date||"日付未設定"}　気分 ${item.mood}/10</strong><div>${escapeHtml(item.text||"")}</div>`;r.appendChild(row);});}
+  const parameterNotes=await getParameterReportPoints(rangeDays);
+  const r=document.getElementById("medicalReportList"); if(r){r.innerHTML=""; let i=0; items.forEach(item=>{const row=document.createElement("div");row.className="medical-report-entry";row.innerHTML=`<strong>${++i}. ${escapeHtml(item.date||"日付未設定")}　気分 ${escapeHtml(item.mood)}/10</strong><div>${escapeHtml(item.text||"")}</div>`;r.appendChild(row);}); parameterNotes.forEach(item=>{const row=document.createElement("div");row.className="medical-report-entry medical-parameter-note";row.innerHTML=`<strong>${++i}. ${escapeHtml(item.date)}　その他パラメーターの補足</strong><div>${escapeHtml(item.note)}</div>`;r.appendChild(row);});}
   const range=document.getElementById("medicalRange"); if(range) range.textContent=`対象期間：${dates[0]} ～ ${dates[dates.length-1]}`;
 }
 function escapeHtml(value){return String(value).replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));}
