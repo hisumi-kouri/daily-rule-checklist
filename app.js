@@ -58,6 +58,14 @@ const DAILY_MENTAL_CATEGORY="__daily_mental__";
 const MURMUR_CATEGORY="__murmur__";
 const HOBBY_CATEGORY="__hobby__";
 const HOBBY_WORK_CATEGORY="__hobby_work__";
+const HIDDEN_CHECKLIST_CATEGORIES=new Set([MURMUR_CATEGORY,HOBBY_CATEGORY,HOBBY_WORK_CATEGORY,"__schedule__","schedule","murmur","hobby"]);
+const HIDDEN_CHECKLIST_TEXTS=new Set(["murmur","schedule","hobby"]);
+function isHiddenChecklistRule(rule){
+  const cat=String(rule?.category||rule?.group||"").toLowerCase();
+  const text=String(rule?.text||rule?.name||"").trim().toLowerCase();
+  return HIDDEN_CHECKLIST_CATEGORIES.has(cat)||HIDDEN_CHECKLIST_TEXTS.has(text);
+}
+
 const READING_CATEGORY="__reading__";
 const DEAR_MASTER_GOAL=100000000;
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
@@ -819,8 +827,14 @@ async function buildMedicalPrintSummary(){
   const mHost=document.getElementById("medicalMentalChart");
   const sHost=document.getElementById("medicalSleepChart");
   const tHost=document.getElementById("medicalSymptomTable");
-  if(mHost)mHost.innerHTML=mental?.outerHTML||"";
-  if(sHost)sHost.innerHTML=sleep?.outerHTML||"";
+  if(mHost){
+    mHost.innerHTML="";
+    if(mental){ const copy=mental.cloneNode(true); copy.removeAttribute("id"); copy.classList.add("medical-mental-copy"); mHost.appendChild(copy); }
+  }
+  if(sHost){
+    sHost.innerHTML="";
+    if(sleep){ const copy=sleep.cloneNode(true); copy.removeAttribute("id"); copy.classList.add("medical-sleep-copy"); sHost.appendChild(copy); }
+  }
   if(tHost){
     tHost.innerHTML="";
     const rows=symptoms?.querySelectorAll(".symptom-row")||[];
@@ -834,7 +848,7 @@ function escapeHtml(value){return String(value).replace(/[&<>'"]/g,ch=>({'&':'&a
 function printMedicalSummary(){
   document.body.classList.add("printing-medical");
   document.title=`医療共有用_心身状態報告_${day()}`;
-  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.51";},120));
+  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.50";},120));
 }
 
 function initReport(){
@@ -1198,48 +1212,54 @@ function setUrgeDraft(type, level){
 }
 
 let urgeChartDays=7;
+function formatSleepDuration(value){
+  if(value===null||value===undefined||value===""||!Number.isFinite(Number(value))) return "未記録";
+  const totalMinutes=Math.round(Number(value)*60);
+  const h=Math.floor(totalMinutes/60), m=totalMinutes%60;
+  return m===0 ? `${h}時間` : `${h}時間${m}分`;
+}
 function renderUrgeChart(points){
   const chart=document.getElementById("urgeChart");
   if(!chart)return;
   chart.innerHTML="";
   chart.dataset.count=String(points.length);
-  const showEvery=points.length>10?5:1;
-  for(let i=0;i<points.length;i++){
-    const point=points[i]||{};
-    const col=document.createElement("div"); col.className="urge-chart-col";
-    const bars=document.createElement("div"); bars.className="urge-bars";
-    URGE_TYPES.forEach(type=>{
-      const raw=point[type.id];
-      const n=(raw===null||raw===undefined||raw==="")?null:Number(raw);
-      const bar=document.createElement("div");
-      bar.className=`urge-bar ${type.id}-bar`;
-      bar.style.height=n!==null && Number.isFinite(n)?`${Math.max(0,Math.min(10,n))*10}%`:'2%';
-      bar.title=`${type.label}: ${n===null?'未記録':n+' / 10'}`;
-      if(n===null) bar.classList.add("unrecorded");
-      bars.appendChild(bar);
-    });
-    const label=document.createElement("span"); label.className="urge-chart-label"; label.textContent=(i%showEvery===0||i===points.length-1)?shortDate(point.date):"";
-    col.append(bars,label); chart.appendChild(col);
+  const width=760,height=270,left=42,right=16,top=18,bottom=34;
+  const innerW=width-left-right, innerH=height-top-bottom;
+  const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svg.setAttribute("viewBox",`0 0 ${width} ${height}`); svg.setAttribute("role","img");
+  svg.setAttribute("aria-label","心の状態の推移を示す折れ線グラフ（0〜10）");
+  for(let level=0;level<=10;level+=2){
+    const y=top+innerH-(level/10)*innerH;
+    const line=document.createElementNS("http://www.w3.org/2000/svg","line");
+    line.setAttribute("x1",left);line.setAttribute("x2",width-right);line.setAttribute("y1",y);line.setAttribute("y2",y);line.setAttribute("class","urge-grid-line");svg.appendChild(line);
+    const t=document.createElementNS("http://www.w3.org/2000/svg","text");t.setAttribute("x",left-8);t.setAttribute("y",y+4);t.setAttribute("text-anchor","end");t.setAttribute("class","urge-axis-label");t.textContent=level;svg.appendChild(t);
   }
+  const usable=Math.max(points.length-1,1), showEvery=points.length>10?5:1;
+  URGE_TYPES.forEach(type=>{
+    const poly=document.createElementNS("http://www.w3.org/2000/svg","polyline");
+    poly.setAttribute("class",`urge-line ${type.id}-line`); poly.setAttribute("fill","none");
+    const pts=[];
+    points.forEach((p,i)=>{const n=p[type.id]===null||p[type.id]===undefined||p[type.id]===""?null:Number(p[type.id]); if(n!==null&&Number.isFinite(n)){const x=left+(i/usable)*innerW,y=top+innerH-(Math.max(0,Math.min(10,n))/10)*innerH;pts.push(`${x},${y}`); const c=document.createElementNS("http://www.w3.org/2000/svg","circle");c.setAttribute("cx",x);c.setAttribute("cy",y);c.setAttribute("r","3.2");c.setAttribute("class",`urge-point ${type.id}-point`);c.dataset.tip=`${type.label}: ${n} / 10（${p.date||""}）`;svg.appendChild(c);}});
+    poly.setAttribute("points",pts.join(" "));svg.appendChild(poly);
+  });
+  points.forEach((p,i)=>{if(i%showEvery===0||i===points.length-1){const x=left+(i/usable)*innerW;const t=document.createElementNS("http://www.w3.org/2000/svg","text");t.setAttribute("x",x);t.setAttribute("y",height-10);t.setAttribute("text-anchor","middle");t.setAttribute("class","urge-axis-date");t.textContent=shortDate(p.date);svg.appendChild(t);}});
+  chart.appendChild(svg);
 }
-
 function renderParameterTrend(points){
   const chart=document.getElementById("parameterTrendChart");
   if(!chart)return;
-  chart.innerHTML="";
-  chart.dataset.count=String(points.length);
-  const maxSleep=24;
-  const showEvery=points.length>10?5:1;
+  chart.innerHTML=""; chart.dataset.count=String(points.length);
+  const maxSleep=24, showEvery=points.length>10?5:1;
   for(let i=0;i<points.length;i++){
-    const p=points[i];
-    const col=document.createElement("div"); col.className="parameter-trend-col";
+    const p=points[i], col=document.createElement("div"); col.className="parameter-trend-col";
     const bars=document.createElement("div"); bars.className="parameter-trend-bars";
     const sleep=document.createElement("div"); sleep.className="parameter-bar sleep-bar";
-    sleep.style.height=`${p.sleep==null?2:Math.max(Number(p.sleep)/maxSleep*100,2)}%`;
-    sleep.title=`睡眠 ${p.sleep==null?"未記録":p.sleep+"時間"}`;
-    bars.append(sleep);
+    const n=(p.sleep===null||p.sleep===undefined||p.sleep==="")?null:Number(p.sleep);
+    sleep.style.height=n===null?"2%":`${Math.max(Math.min(n,maxSleep)/maxSleep*100,2)}%`;
+    const value=document.createElement("span"); value.className="parameter-trend-value"; value.textContent=formatSleepDuration(n);
+    sleep.title=`睡眠：${formatSleepDuration(n)}`; bars.append(sleep); col.append(bars,value);
     const label=document.createElement("span"); label.className="parameter-trend-label"; label.textContent=(i%showEvery===0||i===points.length-1)?shortDate(p.date):"";
-    col.append(bars,label); chart.appendChild(col);
+    col.append(label); chart.appendChild(col);
   }
 }
 function renderSymptomTimeline(points){

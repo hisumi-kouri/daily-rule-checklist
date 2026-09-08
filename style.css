@@ -42,7 +42,7 @@
 .urge-chart-card{overflow:hidden}.urge-chart-tabs{display:flex;gap:8px;margin:0 0 12px}.urge-tab{border:1px solid #d1d5db;background:#fff;border-radius:9px;padding:7px 12px;cursor:pointer;font-size:12px}.urge-tab.active{background:#eef2ff;border-color:#c7d2fe;color:#4338ca;font-weight:700}.urge-chart{height:220px;display:flex;align-items:flex-end;gap:4px;padding:12px 4px 2px;border-top:1px solid #eef0f3}.urge-chart-col{height:100%;flex:1;min-width:8px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}.urge-bars{height:180px;width:100%;max-width:30px;display:flex;align-items:flex-end;justify-content:center;gap:2px;border-bottom:1px solid #d1d5db;background:repeating-linear-gradient(to top,transparent 0,transparent 17px,#f3f4f6 18px)}.urge-bar{width:45%;min-height:2px;border-radius:4px 4px 0 0;transition:height .25s ease}.vanish-bar{background:#6366f1}.die-bar{background:#ef4444}.urge-chart-label{font-size:9px;color:#6b7280;height:16px;margin-top:4px;white-space:nowrap}.urge-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#6b7280;margin-top:8px}.urge-legend span:first-child{color:#4f46e5}.urge-legend span:last-child{color:#dc2626}@media(max-width:650px){.urge-chart{height:190px}.urge-bars{height:150px;max-width:20px}.urge-chart-col{min-width:6px}.urge-chart-label{font-size:8px}}
 @media print{.urge-chart-card{break-inside:avoid}.urge-chart-tabs{display:none}.urge-bars{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 
-.urge-legend{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:11px}.urge-bars{display:flex;align-items:flex-end;justify-content:center;gap:1px;height:150px;width:100%}.urge-bar{flex:1;max-width:7px;min-height:2px;border-radius:4px 4px 0 0}.urge-chart{display:flex;align-items:flex-end;gap:3px;overflow-x:auto}
+.urge-legend{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:11px}.urge-bars{display:flex;align-items:flex-end;justify-content:center;gap:1px;height:150px;width:100%}.urge-bar{flex:1;max-width:7px;min-height:2px;border-radius:4px 4px 0 0}.urge-mood,.urge-anxiety,.urge-irritability,.urge-fatigue{opacity:.75}.urge-chart{display:flex;align-items:flex-end;gap:3px;overflow-x:auto}
 @media print{.urge-chart{overflow:visible}.urge-bar{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 
 .parameter-card{border-left:5px solid #8b5cf6}.parameter-group{padding:12px 0;border-top:1px solid #eef0f3}.parameter-group:first-of-type{border-top:0}.parameter-group>label,.parameter-label{display:block;font-weight:700;margin:0 0 8px}.parameter-inline{display:flex;align-items:center;gap:8px;max-width:260px}.parameter-inline input{flex:1}.parameter-checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.parameter-checks label{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:#fafafa}.parameter-checks input{width:18px;height:18px;accent-color:#6366f1}textarea{width:100%;resize:vertical;border:1px solid #d1d5db;border-radius:10px;padding:11px;font:inherit;line-height:1.6}.parameter-save{border:0;border-radius:10px;padding:11px 16px;background:#7c3aed;color:#fff;font-weight:700;cursor:pointer}.parameter-save:hover{background:#6d28d9}@media(max-width:650px){.parameter-checks{grid-template-columns:1fr}.parameter-inline{max-width:none}}
@@ -170,7 +170,7 @@ button#addBtn:hover,.parameter-save:hover{filter:brightness(1.03);transform:tran
 .chart-bar{background:linear-gradient(180deg,#dba27d,#b86f52)}
 .urge-chart{border-top-color:#eee6dc}
 .urge-bars{background:repeating-linear-gradient(to top,transparent 0,transparent 17px,#eee7df 18px)}
-.vanish-bar{background:#b57499}.die-bar{background:#b85d61}.mood-bar{background:#d69a3b}.anxiety-bar{background:#557fb5}.irritability-bar{background:#8f6bb3}.fatigue-bar{background:#5f927b}
+.vanish-bar{background:#b57499}.die-bar{background:#b85d61}
 .parameter-checks label{background:#fbf6f0;border-color:#eadfd4}
 .parameter-checks input{accent-color:var(--warm-accent)}
 footer{color:#9b8f85}
@@ -207,7 +207,7 @@ footer{color:#9b8f85}
 .reading-head{border-left:4px solid #8b6f5a}.reading-card{border-left-color:#8b6f5a}.reading-list{display:grid;gap:12px}.reading-book-card{border:1px solid rgba(111,78,55,.14);border-radius:18px;padding:16px;background:rgba(255,255,255,.7);box-shadow:0 8px 20px rgba(111,78,55,.06)}.reading-book-top{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:800}.reading-book-top input{width:20px;height:20px;accent-color:#7c9a86}.reading-book-title{flex:1}.reading-book-meta{margin:8px 0 4px;font-size:13px;color:#7c6657}.reading-page-meta{font-size:13px;color:#6f5c50;margin-bottom:10px}.reading-progress-head{display:flex;justify-content:space-between;gap:12px;font-size:13px;margin-bottom:6px}.reading-progress-wrap input[type=range]{width:100%;accent-color:#7c9a86}.reading-actions{margin-top:10px}.reading-add-form{display:grid;grid-template-columns:1.3fr 1fr 1fr 140px 140px auto;gap:10px}.reading-add-form input{min-width:0}@media(max-width:900px){.reading-add-form{grid-template-columns:1fr 1fr}.reading-add-form button{grid-column:1/-1}}@media(max-width:620px){.reading-add-form{grid-template-columns:1fr}}
 
 
-/* v0.51 fixed A4 print layout */
+/* v0.50 fixed A4 print layout */
 @page{size:A4 portrait;margin:10mm}
 @media print{
   html,body{width:190mm!important;min-width:190mm!important;max-width:190mm!important;margin:0 auto!important;padding:0!important;background:#fff!important;overflow:visible!important;font-size:11pt!important;line-height:1.45!important}
@@ -255,21 +255,17 @@ footer{color:#9b8f85}
   body.printing-report #recordTab{display:none!important}
   body.printing-report #reportTab{display:block!important}
 }
-/* v0.51 medical readability */
+/* v0.50 medical readability */
 .symptom-timeline-block{margin-top:18px;padding-top:14px;border-top:1px solid #eadfd4}.symptom-timeline{display:grid;gap:6px;margin-top:8px}.symptom-row{display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:start;padding:7px 10px;border:1px solid #efe4da;border-radius:9px;background:#fffaf6;font-size:12px}.symptom-row strong{color:#6f5c50}.symptom-none{color:#9b8b80}.medical-print-summary{display:none}
 .medical-chart-host .urge-chart,.medical-chart-host .parameter-trend-chart{overflow:visible!important}
 @media print{
   body.printing-medical #recordTab,body.printing-medical header,body.printing-medical .app-tabs,body.printing-medical footer{display:none!important}
-  /* 左綴じ用：左・上を各5cm確保し、右・下は読みやすい余白にする。 */
-  @page{size:A4 portrait;margin:50mm 12mm 12mm 50mm}
-  body.printing-medical,body.printing-medical html{width:auto!important;min-width:0!important;max-width:none!important;margin:0!important;padding:0!important}
-  body.printing-medical #medicalPrintSummary{display:block!important;width:auto!important;max-width:none!important;margin:0!important;background:#fff!important;color:#222!important}
-  body.printing-medical main{width:auto!important;max-width:none!important;margin:0!important;padding:0!important}
+  body.printing-medical #medicalPrintSummary{display:block!important;width:190mm!important;max-width:190mm!important;margin:0 auto!important;background:#fff!important;color:#222!important}
+  body.printing-medical main{width:190mm!important;max-width:190mm!important;margin:0 auto!important;padding:0!important}
   .medical-title{font-size:19pt;font-weight:800;margin:0 0 2mm}
   .medical-range{font-size:9pt;color:#665a54;margin-bottom:5mm}
   .medical-section{margin:0 0 5mm;padding:4mm;border:1px solid #dfd2c7;border-radius:3mm;break-inside:avoid-page;page-break-inside:avoid}
   .medical-section h2{font-size:12pt;margin:0 0 3mm;color:#59483e}
-  .medical-chart-description{font-size:8.5pt!important;line-height:1.45!important;margin:0 0 2.5mm!important;color:#554a44!important}
   .medical-chart-host .urge-chart{height:58mm!important;display:grid!important;grid-template-columns:repeat(30,minmax(0,1fr))!important;gap:.35mm!important;padding:2mm!important}
   .medical-chart-host .urge-chart .urge-chart-col{min-width:0!important;width:auto!important;height:100%!important}
   .medical-chart-host .urge-bars{height:42mm!important;max-width:none!important;gap:.15mm!important}
@@ -286,5 +282,42 @@ footer{color:#9b8f85}
   .medical-report-list{display:grid;gap:2mm}.medical-report-entry{padding:2.5mm 3mm;border-left:1mm solid #a56f52;background:#fffaf6;break-inside:avoid;font-size:9pt}.medical-report-entry strong{display:block;margin-bottom:1mm;color:#7b4f3a}
   body.printing-medical *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 }
-.chart-explanation{margin:8px 0 0;color:#665a54;font-size:12px;line-height:1.55}.legend-vanish{color:#b57499!important}.legend-die{color:#b85d61!important}.legend-mood{color:#d69a3b!important}.legend-anxiety{color:#557fb5!important}.legend-irritability{color:#8f6bb3!important}.legend-fatigue{color:#5f927b!important}.legend-sleep{color:#5f7f78!important}
-@media print{.chart-explanation{font-size:8pt!important;margin-top:2mm!important}.printing-medical .chart-explanation{display:none!important}}
+
+
+/* v0.50 医療共有PDF：余白・視認性・重なり修正 */
+.urge-legend{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0;font-weight:700}
+.urge-legend span{padding:4px 8px;border-radius:999px;color:#fff!important;text-shadow:none}
+.urge-legend .vanish,.urge-legend span:nth-child(1){background:#7b1fa2!important}
+.urge-legend .die,.urge-legend span:nth-child(2){background:#d32f2f!important}
+.urge-legend .mood,.urge-legend span:nth-child(3){background:#1565c0!important}
+.urge-legend .anxiety,.urge-legend span:nth-child(4){background:#ef6c00!important}
+.urge-legend .irritability,.urge-legend span:nth-child(5){background:#00897b!important}
+.urge-legend .fatigue,.urge-legend span:nth-child(6){background:#5d4037!important}
+@media print{
+  @page{size:A4 portrait;margin:16mm 15mm 18mm 15mm}
+  body.printing-medical #medicalPrintSummary,body.printing-medical main{width:auto!important;max-width:none!important;margin:0!important;padding:0!important}
+  .medical-section{margin:0 0 7mm!important;padding:5mm!important}
+  .medical-chart-host{width:100%!important;overflow:hidden!important}
+  .medical-chart-host .medical-mental-copy{height:62mm!important;box-sizing:border-box!important}
+  .medical-chart-host .medical-sleep-copy{height:48mm!important;box-sizing:border-box!important;margin-top:2mm!important}
+  .medical-chart-host .parameter-trend-chart{display:grid!important;align-items:end!important}
+  .medical-chart-host .parameter-trend-col{height:100%!important;display:flex!important;flex-direction:column!important;justify-content:flex-end!important;overflow:hidden!important}
+  .medical-chart-host .parameter-trend-bars{height:31mm!important;min-height:31mm!important;overflow:hidden!important;position:relative!important}
+  .medical-chart-host .parameter-bar{position:relative!important;bottom:auto!important;margin:0!important}
+  .medical-chart-host .parameter-trend-label{position:static!important;display:block!important;line-height:1!important;white-space:nowrap!important;overflow:hidden!important}
+  .medical-chart-host .urge-legend{font-size:7pt!important;gap:2mm!important;margin-bottom:2mm!important}
+}
+
+/* v0.51: 心の状態を折れ線グラフ化／睡眠時間を時分表示 */
+.urge-chart{height:280px;display:block;overflow-x:auto;overflow-y:hidden;padding:4px 0;}
+.urge-chart svg{width:100%;min-width:620px;height:270px;display:block;}
+.urge-grid-line{stroke:#e8dfd6;stroke-width:1;}
+.urge-axis-label,.urge-axis-date{fill:#7b6d62;font-size:11px;font-family:inherit;}
+.urge-line{stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;}
+.urge-point{stroke:#fff;stroke-width:1.5;cursor:help;}
+.vanish-line{stroke:#b57499}.die-line{stroke:#b85d61}.mood-line{stroke:#6f8f78}.anxiety-line{stroke:#7d91ad}.irritability-line{stroke:#c28a6a}.fatigue-line{stroke:#8b7aa8}
+.vanish-point{fill:#b57499}.die-point{fill:#b85d61}.mood-point{fill:#6f8f78}.anxiety-point{fill:#7d91ad}.irritability-point{fill:#c28a6a}.fatigue-point{fill:#8b7aa8}
+.parameter-trend-value{font-size:10px;color:#5f7f78;font-weight:700;min-height:15px;white-space:nowrap;margin-top:2px;}
+.parameter-trend-bars{height:110px;}
+@media(max-width:650px){.urge-chart{height:245px}.urge-chart svg{height:235px}.parameter-trend-value{font-size:9px}.parameter-trend-bars{height:95px}}
+@media print{.urge-chart{overflow:visible}.urge-chart svg{min-width:0}.parameter-trend-value{font-size:9px}}
