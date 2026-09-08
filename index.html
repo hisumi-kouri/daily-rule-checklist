@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#4f46e5">
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=0.49">
-  <title>毎日のルールチェック v0.50</title>
+  <link rel="stylesheet" href="style.css?v=0.51">
+  <title>毎日のルールチェック v0.51</title>
 </head>
 <body>
   <header>
@@ -106,10 +106,12 @@
       <div class="medical-range" id="medicalRange"></div>
       <section class="medical-section">
         <h2>1. 心の状態の推移</h2>
+        <p class="medical-chart-description">棒の高さは各項目の強さ（0〜10）です。色は下の凡例に対応しています。</p>
         <div id="medicalMentalChart" class="medical-chart-host"></div>
       </section>
       <section class="medical-section">
         <h2>2. 睡眠時間</h2>
+        <p class="medical-chart-description">棒の高さは、その日の睡眠時間（0〜24時間）です。記録がない日は小さく表示されます。</p>
         <div id="medicalSleepChart" class="medical-chart-host"></div>
       </section>
       <section class="medical-section">
@@ -246,6 +248,7 @@
         <span class="muted small">直近7日間</span>
       </div>
       <div id="achievementChart" class="achievement-chart" aria-label="直近7日間の達成率グラフ"></div>
+      <p class="chart-explanation">棒の高さは、その日の達成率（0〜100%）です。棒の上の数字は達成率、下の日付は記録日を示します。</p>
       <p id="chartNote" class="muted small">データを読み込んでいます…</p>
     </section>
 
@@ -260,12 +263,14 @@
       </div>
       <div id="urgeChart" class="urge-chart" aria-label="心の状態の推移グラフ"></div>
       <div class="urge-legend">
-<span>● 消えたい衝動</span><span>● 死にたい衝動</span><span>● 気分</span><span>● 不安</span><span>● イライラ</span><span>● 疲労感</span>
+<span class="legend-vanish">● 消えたい衝動</span><span class="legend-die">● 死にたい衝動</span><span class="legend-mood">● 気分</span><span class="legend-anxiety">● 不安</span><span class="legend-irritability">● イライラ</span><span class="legend-fatigue">● 疲労感</span>
 </div>
+      <p class="chart-explanation">各日の6本の棒は心の状態の強さ（0〜10）です。色と項目の対応は上の凡例をご覧ください。</p>
       <div class="parameter-trend-block">
         <div class="parameter-trend-title">📝 睡眠時間の推移</div>
         <div id="parameterTrendChart" class="parameter-trend-chart" aria-label="睡眠時間の推移"></div>
-        <div class="parameter-trend-legend"><span>● 睡眠時間</span></div>
+        <div class="parameter-trend-legend"><span class="legend-sleep">● 睡眠時間</span></div>
+        <p class="chart-explanation">棒の高さは睡眠時間（0〜24時間）です。棒にカーソルを重ねると、記録した時間を確認できます。</p>
       </div>
       <div class="symptom-timeline-block">
         <div class="parameter-trend-title">🩺 症状・体験の記録</div>
@@ -332,7 +337,7 @@
     </div>
   </main>
 
-  <footer>Supabase同期版 v0.50</footer>
-  <script type="module" src="app.js?v=0.49"></script>
+  <footer>Supabase同期版 v0.51</footer>
+  <script type="module" src="app.js?v=0.51"></script>
 </body>
 </html>

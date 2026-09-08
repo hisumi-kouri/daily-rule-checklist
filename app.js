@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.49";
+const APP_VERSION = "v0.51";
 const SUPABASE_URL = "https://nhyikuzvigfzrcgetxej.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
 let supabaseClient = null;
@@ -58,14 +58,6 @@ const DAILY_MENTAL_CATEGORY="__daily_mental__";
 const MURMUR_CATEGORY="__murmur__";
 const HOBBY_CATEGORY="__hobby__";
 const HOBBY_WORK_CATEGORY="__hobby_work__";
-const HIDDEN_CHECKLIST_CATEGORIES=new Set([MURMUR_CATEGORY,HOBBY_CATEGORY,HOBBY_WORK_CATEGORY,"__schedule__","schedule","murmur","hobby"]);
-const HIDDEN_CHECKLIST_TEXTS=new Set(["murmur","schedule","hobby"]);
-function isHiddenChecklistRule(rule){
-  const cat=String(rule?.category||rule?.group||"").toLowerCase();
-  const text=String(rule?.text||rule?.name||"").trim().toLowerCase();
-  return HIDDEN_CHECKLIST_CATEGORIES.has(cat)||HIDDEN_CHECKLIST_TEXTS.has(text);
-}
-
 const READING_CATEGORY="__reading__";
 const DEAR_MASTER_GOAL=100000000;
 const DEFAULT_PRIORITIES=["体調第一","生活","仕事"];
@@ -827,14 +819,8 @@ async function buildMedicalPrintSummary(){
   const mHost=document.getElementById("medicalMentalChart");
   const sHost=document.getElementById("medicalSleepChart");
   const tHost=document.getElementById("medicalSymptomTable");
-  if(mHost){
-    mHost.innerHTML="";
-    if(mental){ const copy=mental.cloneNode(true); copy.removeAttribute("id"); copy.classList.add("medical-mental-copy"); mHost.appendChild(copy); }
-  }
-  if(sHost){
-    sHost.innerHTML="";
-    if(sleep){ const copy=sleep.cloneNode(true); copy.removeAttribute("id"); copy.classList.add("medical-sleep-copy"); sHost.appendChild(copy); }
-  }
+  if(mHost)mHost.innerHTML=mental?.outerHTML||"";
+  if(sHost)sHost.innerHTML=sleep?.outerHTML||"";
   if(tHost){
     tHost.innerHTML="";
     const rows=symptoms?.querySelectorAll(".symptom-row")||[];
@@ -848,7 +834,7 @@ function escapeHtml(value){return String(value).replace(/[&<>'"]/g,ch=>({'&':'&a
 function printMedicalSummary(){
   document.body.classList.add("printing-medical");
   document.title=`医療共有用_心身状態報告_${day()}`;
-  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.50";},120));
+  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.51";},120));
 }
 
 function initReport(){
