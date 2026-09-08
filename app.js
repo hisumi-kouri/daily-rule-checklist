@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.51";
+const APP_VERSION = "v0.52.1";
 const SUPABASE_URL = "https://nhyikuzvigfzrcgetxej.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
 let supabaseClient = null;
@@ -29,7 +29,7 @@ const base=[];
 
 let supabaseReady=false, user=null;
 let supabaseOffline=false;
-let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}, reading:[]};
+let state={checks:{}, custom:[], priority:[], medications:[], parameters:{sleepHours:"",hallucinations:[],note:""}, parameterRowId:null, murmurs:[], murmurPage:1, hobby:{dearMaster:"",works:[]}, reading:[], schedule:[]};
 const BASE_SENTINEL_CATEGORY="__system__";
 const BASE_SENTINEL_TEXT="__base_initialized_v1__";
 const BASIC_RULES_SENTINEL_TEXT="__basic_rules_initialized_v2__";
@@ -739,6 +739,83 @@ async function deleteReadingBook(id){
   if(supabaseReady&&user&&!String(b.id).startsWith("reading-local-")){try{await supabaseClient.from("custom_rules").delete().eq("id",b.id).eq("user_id",user.id);}catch{}}
   state.reading.splice(idx,1);setLocalReading(state.reading);renderReading();
 }
+const SCHEDULE_CATEGORIES=new Set(["__schedule__","schedule"]);
+let scheduleFilter="all";
+function parseScheduleRow(row){
+  try{
+    const d=JSON.parse(row.text||"{}");
+    if(d && (d.title||d.date)) return {id:row.id,date:d.date||day(),time:d.time||"",title:d.title||"",note:d.note||"",done:!!d.done};
+  }catch{}
+  return {id:row.id,date:day(),time:"",title:row.text||"",note:row.source||"",done:false};
+}
+async function loadSchedule(){
+  state.schedule=[];
+  const local=localStorage.getItem("dailySchedule");
+  if(local){try{state.schedule=JSON.parse(local)||[];}catch{}}
+  if(supabaseReady&&user){
+    let res=await supabaseClient.from("custom_rules").select("id,text,category,source,created_at").eq("user_id",user.id).in("category",Array.from(SCHEDULE_CATEGORIES)).order("created_at",{ascending:true});
+    if(!res.error) state.schedule=(res.data||[]).map(parseScheduleRow);
+  }
+  state.schedule.sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.time||"").localeCompare(b.time||""));
+  renderSchedule();
+}
+function saveLocalSchedule(){localStorage.setItem("dailySchedule",JSON.stringify(state.schedule));}
+function scheduleMatches(item){
+  if(scheduleFilter==="all")return true;
+  const d=new Date((item.date||day())+"T00:00:00");
+  const now=new Date(); now.setHours(0,0,0,0);
+  if(scheduleFilter==="today")return item.date===day();
+  const diff=Math.floor((d-now)/86400000);
+  return diff>=0&&diff<7;
+}
+function renderSchedule(){
+  const list=document.getElementById("scheduleList"),count=document.getElementById("scheduleCount");
+  if(!list||!count)return;
+  const items=state.schedule.filter(scheduleMatches);
+  count.textContent=`${items.length}件`;
+  list.innerHTML="";
+  if(!items.length){const e=document.createElement("p");e.className="muted small";e.textContent="予定はありません。";list.appendChild(e);return;}
+  items.forEach(item=>{
+    const row=document.createElement("article");row.className=`schedule-item${item.done?" done":""}`;
+    const check=document.createElement("input");check.type="checkbox";check.checked=!!item.done;check.title="完了";
+    check.onchange=()=>toggleSchedule(item.id,check.checked);
+    const main=document.createElement("div");main.className="schedule-main";
+    const head=document.createElement("div");head.className="schedule-item-head";
+    const date=document.createElement("strong");date.textContent=item.date||"日付未設定";
+    const time=document.createElement("span");time.textContent=item.time||"時間未設定";
+    head.append(date,time);main.append(head);
+    const title=document.createElement("div");title.className="schedule-title";title.textContent=item.title;main.append(title);
+    if(item.note){const note=document.createElement("div");note.className="schedule-note";note.textContent=item.note;main.append(note);}
+    const del=document.createElement("button");del.type="button";del.className="delete-rule";del.textContent="削除";del.onclick=()=>deleteSchedule(item.id);
+    row.append(check,main,del);list.appendChild(row);
+  });
+}
+async function addSchedule(){
+  const date=document.getElementById("scheduleDate")?.value||day(),time=document.getElementById("scheduleTime")?.value||"",title=(document.getElementById("scheduleTitle")?.value||"").trim(),note=(document.getElementById("scheduleNote")?.value||"").trim();
+  if(!title){alert("予定の内容を入力してください。");return;}
+  const payload=JSON.stringify({date,time,title,note,done:false});
+  let id=`local-schedule-${Date.now()}`;
+  if(supabaseReady&&user){const res=await supabaseClient.from("custom_rules").insert({user_id:user.id,text:payload,category:"__schedule__",source:note}).select().single();if(!res.error)id=res.data.id;else console.error(res.error);}
+  state.schedule.push({id,date,time,title,note,done:false});saveLocalSchedule();
+  document.getElementById("scheduleTitle").value="";document.getElementById("scheduleNote").value="";document.getElementById("scheduleSaveStatus").textContent="予定を保存しました。";renderSchedule();
+}
+async function toggleSchedule(id,done){
+  const item=state.schedule.find(x=>String(x.id)===String(id));if(!item)return;item.done=done;saveLocalSchedule();
+  if(supabaseReady&&user&&!String(id).startsWith("local-")){await supabaseClient.from("custom_rules").update({text:JSON.stringify({date:item.date,time:item.time,title:item.title,note:item.note,done})}).eq("id",id).eq("user_id",user.id);}
+  renderSchedule();
+}
+async function deleteSchedule(id){
+  if(!confirm("この予定を削除しますか？"))return;
+  if(supabaseReady&&user&&!String(id).startsWith("local-"))await supabaseClient.from("custom_rules").delete().eq("id",id).eq("user_id",user.id).in("category",Array.from(SCHEDULE_CATEGORIES));
+  state.schedule=state.schedule.filter(x=>String(x.id)!==String(id));saveLocalSchedule();renderSchedule();
+}
+function initSchedule(){
+  const d=document.getElementById("scheduleDate");if(d)d.value=day();
+  document.getElementById("addScheduleBtn")?.addEventListener("click",addSchedule);
+  document.querySelectorAll(".schedule-filter").forEach(btn=>btn.addEventListener("click",()=>{scheduleFilter=btn.dataset.range;document.querySelectorAll(".schedule-filter").forEach(x=>x.classList.toggle("active",x===btn));renderSchedule();}));
+  renderSchedule();
+}
+
 function initReading(){document.getElementById("addReadingBtn")?.addEventListener("click",addReadingBook);renderReading();}
 function renderMurmurs(){
   const list=document.getElementById("murmurList"), count=document.getElementById("murmurCount"), pager=document.getElementById("murmurPagination");
@@ -919,7 +996,7 @@ async function loadCloud(){
   if(cr.error){console.error(cr.error); return;}
   const rows=cr.data||[];
   state.custom=rows
-    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY && x.category!==DAILY_PARAMETER_CATEGORY && x.category!==DAILY_MENTAL_CATEGORY)
+    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY && x.category!==DAILY_PARAMETER_CATEGORY && x.category!==DAILY_MENTAL_CATEGORY && !SCHEDULE_CATEGORIES.has(x.category))
     .map(x=>({id:x.id,text:x.text,cat:x.category,source:x.source||""}));
   state.priority=rows
     .filter(x=>x.category===PRIORITY_CATEGORY && x.text!==PRIORITY_SENTINEL_TEXT)
@@ -927,6 +1004,7 @@ async function loadCloud(){
   state.medications=rows.filter(x=>x.category===MEDICATION_CATEGORY).map(parseMedicationRow);
   await loadDailyParameters();
   await loadMurmurs();
+  await loadSchedule();
   render();
   await loadAchievementHistory();
   await loadUrgeHistory(urgeChartDays);
@@ -985,6 +1063,7 @@ async function enterOfflineMode(error){
   try{ await loadDailyParameters(); }catch{}
   try{ await loadUrgeHistory(urgeChartDays); }catch{}
   try{ await loadParameterTrendHistory(urgeChartDays); }catch{}
+  try{ await loadSchedule(); }catch{}
   render();
 }
 
@@ -1649,6 +1728,7 @@ function refreshCategoryOptions(){
 document.getElementById("date").textContent=new Intl.DateTimeFormat("ja-JP",{dateStyle:"full"}).format(new Date());
 initUrgeChartTabs();
 initReading();
+initSchedule();
 loadReading();
 initMurmurs();
 initReport();
