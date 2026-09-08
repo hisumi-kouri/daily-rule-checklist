@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.52.2";
+const APP_VERSION = "v0.52.4";
 const SUPABASE_URL = "https://nhyikuzvigfzrcgetxej.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
 let supabaseClient = null;
@@ -996,7 +996,7 @@ async function loadCloud(){
   if(cr.error){console.error(cr.error); return;}
   const rows=cr.data||[];
   state.custom=rows
-    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY && x.category!==DAILY_PARAMETER_CATEGORY && x.category!==DAILY_MENTAL_CATEGORY && !SCHEDULE_CATEGORIES.has(x.category))
+    .filter(x=>x.category!==BASE_SENTINEL_CATEGORY && x.text!==BASE_SENTINEL_TEXT && x.category!==PRIORITY_CATEGORY && x.category!==MEDICATION_CATEGORY && x.category!==DAILY_PARAMETER_CATEGORY && x.category!==DAILY_MENTAL_CATEGORY && x.category!==MURMUR_CATEGORY && x.category!==HOBBY_CATEGORY && x.category!==HOBBY_WORK_CATEGORY && x.category!==READING_CATEGORY && !SCHEDULE_CATEGORIES.has(x.category))
     .map(x=>({id:x.id,text:x.text,cat:x.category,source:x.source||""}));
   state.priority=rows
     .filter(x=>x.category===PRIORITY_CATEGORY && x.text!==PRIORITY_SENTINEL_TEXT)
