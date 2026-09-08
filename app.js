@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.52.1";
+const APP_VERSION = "v0.52.2";
 const SUPABASE_URL = "https://nhyikuzvigfzrcgetxej.supabase.co";
 const SUPABASE_KEY = "sb_publishable_WrbDksID8cIESwNpSX5AkQ_Z3hHSSAG";
 let supabaseClient = null;
@@ -890,9 +890,9 @@ async function renderReport(){
   const empty=document.getElementById("reportEmpty");
   const count=document.getElementById("reportCount");
   if(!list||!empty||!count)return;
-  const items=(state.murmurs||[]).filter(x=>Number(x.mood)>=6);
+  const items=[];
   const parameterNotes=await getParameterReportPoints(30);
-  count.textContent=`${items.length + parameterNotes.length}件`;
+  count.textContent=`${parameterNotes.length}件`;
   list.innerHTML="";
   empty.style.display=(items.length||parameterNotes.length)?"none":"block";
   let index=0;
@@ -917,7 +917,7 @@ async function renderReport(){
 }
 function printReport(){
   const oldTitle=document.title;
-  document.title=`呟き報告書_${day()}`;
+  document.title=`報告書_${day()}`;
   document.body.classList.add("printing-report");
   switchAppTab("report");
   setTimeout(()=>{window.print();document.body.classList.remove("printing-report");document.title=oldTitle;},50);
@@ -946,7 +946,7 @@ async function buildMedicalPrintSummary(){
     const rows=symptoms?.querySelectorAll(".symptom-row")||[];
     rows.forEach(r=>{const rr=document.createElement("div");rr.className="medical-symptom-row";rr.innerHTML=r.innerHTML;tHost.appendChild(rr);});
   }
-  const items=(state.murmurs||[]).filter(x=>Number(x.mood)>=6);
+  const items=[];
   const parameterNotes=await getParameterReportPoints(rangeDays);
   const r=document.getElementById("medicalReportList"); if(r){r.innerHTML=""; let i=0; items.forEach(item=>{const row=document.createElement("div");row.className="medical-report-entry";row.innerHTML=`<strong>${++i}. ${escapeHtml(item.date||"日付未設定")}　気分 ${escapeHtml(item.mood)}/10</strong><div>${escapeHtml(item.text||"")}</div>`;r.appendChild(row);}); parameterNotes.forEach(item=>{const row=document.createElement("div");row.className="medical-report-entry medical-parameter-note";row.innerHTML=`<strong>${++i}. ${escapeHtml(item.date)}　その他パラメーターの補足</strong><div>${escapeHtml(item.note)}</div>`;r.appendChild(row);});}
   const range=document.getElementById("medicalRange"); if(range) range.textContent=`対象期間：${dates[0]} ～ ${dates[dates.length-1]}`;
@@ -955,7 +955,7 @@ function escapeHtml(value){return String(value).replace(/[&<>'"]/g,ch=>({'&':'&a
 function printMedicalSummary(){
   document.body.classList.add("printing-medical");
   document.title=`医療共有用_心身状態報告_${day()}`;
-  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.50";},120));
+  buildMedicalPrintSummary().then(()=>setTimeout(()=>{window.print();document.body.classList.remove("printing-medical");document.title="毎日のルールチェック v0.52.2";},120));
 }
 
 function initReport(){
@@ -1003,7 +1003,6 @@ async function loadCloud(){
     .map(x=>({id:x.id,text:x.text}));
   state.medications=rows.filter(x=>x.category===MEDICATION_CATEGORY).map(parseMedicationRow);
   await loadDailyParameters();
-  await loadMurmurs();
   await loadSchedule();
   render();
   await loadAchievementHistory();
@@ -1693,10 +1692,8 @@ function render(){
 // タブ切り替え：今日のチェックシートにルール一覧とルール追加を集約
 const checksheetTab=document.getElementById("checksheetTab");
 const recordTab=document.getElementById("recordTab");
-const murmurTab=document.getElementById("murmurTab");
 const reportTab=document.getElementById("reportTab");
-const hobbyTab=document.getElementById("hobbyTab");
-const readingTab=document.getElementById("readingTab");
+const scheduleTab=document.getElementById("scheduleTab");
 const categoriesEl=document.getElementById("categories");
 const addRulesEl=document.querySelector("section.add");
 if(checksheetTab && categoriesEl && addRulesEl){
@@ -1707,10 +1704,8 @@ function switchAppTab(name){
   document.querySelectorAll(".app-tab").forEach(btn=>btn.classList.toggle("active",btn.dataset.tab===name));
   checksheetTab?.classList.toggle("active",name==="checksheet");
   recordTab?.classList.toggle("active",name==="record");
-  murmurTab?.classList.toggle("active",name==="murmur");
   reportTab?.classList.toggle("active",name==="report");
-  hobbyTab?.classList.toggle("active",name==="hobby");
-  readingTab?.classList.toggle("active",name==="reading");
+  scheduleTab?.classList.toggle("active",name==="schedule");
 }
 document.querySelectorAll(".app-tab").forEach(btn=>btn.addEventListener("click",()=>switchAppTab(btn.dataset.tab)));
 switchAppTab("record");
@@ -1727,13 +1722,8 @@ function refreshCategoryOptions(){
 
 document.getElementById("date").textContent=new Intl.DateTimeFormat("ja-JP",{dateStyle:"full"}).format(new Date());
 initUrgeChartTabs();
-initReading();
 initSchedule();
-loadReading();
-initMurmurs();
 initReport();
-initHobby();
-loadHobby();
 
 
 document.getElementById("addMedicationBtn").onclick=async()=>{
